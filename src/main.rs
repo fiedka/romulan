@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use romulan::amd;
-use romulan::amd::directory::{Directory, PspComboDirectory};
+use romulan::amd::directory::{Directory, PspComboDirectory, PspDirectory};
 use romulan::intel;
 use romulan::intel::{section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
@@ -195,16 +195,51 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
     }
 }
 
-fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom) {
-    // TODO: diff
+const MAPPING_MASK: usize = 0x00ff_ffff;
+
+fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     match rom1.psp() {
         Ok(psp1) => match rom2.psp() {
             Ok(psp2) => {
-                println!("{psp1:#?}");
-                println!("{psp2:#?}");
+                println!("\n  1:");
+                for p in &psp1 {
+                    if let Ok(es) = p.get_entries() {
+                        for e in es {
+                            println!("- {e:?}");
+                            let b = MAPPING_MASK & e.directory as usize;
+                            if let Ok(d) = PspDirectory::new(&rom1.data()[b..]) {
+                                for de in d.entries {
+                                    println!("{}", de.description());
+                                }
+                            }
+                        }
+                    }
+                }
 
-                let c1 = psp1.get_checksum().unwrap();
-                let c2 = psp2.get_checksum().unwrap();
+                println!("\n  2:");
+                for p in &psp2 {
+                    if let Ok(es) = p.get_entries() {
+                        for e in es {
+                            println!("- {e:?}");
+                            let b = MAPPING_MASK & e.directory as usize;
+                            if let Ok(d) = PspDirectory::new(&rom2.data()[b..]) {
+                                for de in d.entries {
+                                    println!("{}", de.description());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let psp1len = psp1.len();
+                let psp2len = psp2.len();
+                println!("{psp1len} vs {psp2len}");
+                if verbose {
+                    println!("{psp1:#?}");
+                    println!("{psp2:#?}");
+                }
+                let c1 = psp1[0].get_checksum().unwrap();
+                let c2 = psp2[0].get_checksum().unwrap();
                 if c1 != c2 {
                     println!("images differ: checksum {c1:04x} != {c2:04x}");
                 }
@@ -232,11 +267,11 @@ fn main() -> io::Result<()> {
         let data2 = fs::read(file2).unwrap();
         let rom1 = amd::Rom::new(&data1).unwrap();
         let rom2 = amd::Rom::new(&data2).unwrap();
-        if do_print {
+        if verbose {
             print_amd(&rom1, print_json);
             print_amd(&rom2, print_json);
         }
-        diff_amd(&rom1, &rom2);
+        diff_amd(&rom1, &rom2, verbose);
     } else {
         println!("Scanning {file1}");
         match intel::Rom::new(&data1) {

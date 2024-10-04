@@ -132,8 +132,8 @@ impl PspDirectoryEntry {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PspDirectory {
-    header: DirectoryHeader,
-    entries: Vec<PspDirectoryEntry>,
+    pub header: DirectoryHeader,
+    pub entries: Vec<PspDirectoryEntry>,
 }
 
 impl<'a> PspDirectory {

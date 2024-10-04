@@ -1,5 +1,6 @@
 use alloc::string::String;
 use alloc::string::ToString;
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes};
 
@@ -12,11 +13,11 @@ mod psp;
 #[derive(Clone, Debug)]
 pub enum Directory {
     Bios(BiosDirectory),
-    BiosCombo(BiosComboDirectory),
     BiosLevel2(BiosDirectory),
+    BiosCombo(BiosComboDirectory),
     Psp(PspDirectory),
-    PspCombo(PspComboDirectory),
     PspLevel2(PspDirectory),
+    PspCombo(PspComboDirectory),
 }
 
 impl<'a> Directory {
@@ -34,8 +35,32 @@ impl<'a> Directory {
 
     pub fn get_checksum(self: &Self) -> Result<u32, String> {
         match self {
+            Directory::Bios(d) => Ok(d.header.checksum),
+            Directory::BiosCombo(d) => Ok(d.header.checksum),
+            Directory::BiosLevel2(d) => Ok(d.header.checksum),
+            Directory::Psp(d) => Ok(d.header.checksum),
             Directory::PspCombo(d) => Ok(d.header.checksum),
-            _ => Err("xxx".to_string()),
+            Directory::PspLevel2(d) => Ok(d.header.checksum),
+        }
+    }
+
+    pub fn get_entries(self: &Self) -> Result<Vec<ComboDirectoryEntry>, String> {
+        match self {
+            Directory::BiosCombo(d) => {
+                let mut es = Vec::<ComboDirectoryEntry>::new();
+                for e in d.entries() {
+                    es.push(e)
+                }
+                Ok(es)
+            }
+            Directory::PspCombo(d) => {
+                let mut es = Vec::<ComboDirectoryEntry>::new();
+                for e in d.entries() {
+                    es.push(e)
+                }
+                Ok(es)
+            }
+            _ => Err("not a combo directory".to_string()),
         }
     }
 }

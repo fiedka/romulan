@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::AsBytes;
@@ -16,6 +17,7 @@ pub struct Rom<'a> {
 }
 
 const MAGIC: u32 = 0x55aa55aa;
+const STEP_SIZE: usize = 0x1000;
 
 impl<'a> Rom<'a> {
     pub fn new(data: &'a [u8]) -> Result<Rom, String> {
@@ -40,7 +42,7 @@ impl<'a> Rom<'a> {
                 });
             }
 
-            i += 0x1000;
+            i += STEP_SIZE;
         }
 
         Err(format!("Embedded Firmware Structure not found"))
@@ -54,12 +56,27 @@ impl<'a> Rom<'a> {
         self.efs
     }
 
-    pub fn psp(&self) -> Result<directory::Directory, String> {
-        let base = self.efs.psp as usize;
-        let s = &self.data[base..];
-        match directory::Directory::new(s) {
-            Ok(d) => Ok(d),
-            Err(e) => Err(format!("0x{base:08x}: {e}")),
+    pub fn psp(&self) -> Result<Vec<directory::Directory>, String> {
+        let mut dirs = Vec::<directory::Directory>::new();
+
+        // TODO: Better deal with the mapping cleanly.
+        let b1 = self.efs.psp_legacy as usize & 0x00ff_ffff;
+        let b2 = self.efs.psp as usize;
+
+        for b in [b1, b2] {
+            if b == 0 {
+                continue;
+            }
+            let s = &self.data[b..];
+            match directory::Directory::new(s) {
+                Ok(d) => {
+                    dirs.push(d);
+                }
+                Err(e) => {
+                    return Err(format!("0x{b:08x}: {e}"));
+                }
+            }
         }
+        Ok(dirs)
     }
 }

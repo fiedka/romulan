@@ -78,8 +78,8 @@ impl BiosDirectoryEntry {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BiosDirectory {
-    header: DirectoryHeader,
-    entries: Vec<BiosDirectoryEntry>,
+    pub header: DirectoryHeader,
+    pub entries: Vec<BiosDirectoryEntry>,
 }
 
 impl<'a> BiosDirectory {
@@ -116,8 +116,8 @@ impl<'a> BiosDirectory {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct BiosComboDirectory {
-    header: ComboDirectoryHeader,
-    entries: Vec<ComboDirectoryEntry>,
+    pub header: ComboDirectoryHeader,
+    pub entries: Vec<ComboDirectoryEntry>,
 }
 
 impl<'a> BiosComboDirectory {
