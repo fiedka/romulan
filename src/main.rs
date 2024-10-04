@@ -202,7 +202,9 @@ fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom) {
                 println!("{psp1:#?}");
                 println!("{psp2:#?}");
             }
-            Err(e) => {}
+            Err(e) => {
+                println!("PSP2: {e}");
+            }
         },
         Err(e) => {
             println!("PSP1: {e}");
