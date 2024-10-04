@@ -170,8 +170,8 @@ impl<'a> PspDirectory {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct PspComboDirectory {
-    header: ComboDirectoryHeader,
-    entries: Vec<ComboDirectoryEntry>,
+    pub header: ComboDirectoryHeader,
+    pub entries: Vec<ComboDirectoryEntry>,
 }
 
 impl<'a> PspComboDirectory {

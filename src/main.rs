@@ -2,6 +2,7 @@
 
 use clap::Parser;
 use romulan::amd;
+use romulan::amd::directory::{Directory, PspComboDirectory};
 use romulan::intel;
 use romulan::intel::{section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
@@ -201,6 +202,12 @@ fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom) {
             Ok(psp2) => {
                 println!("{psp1:#?}");
                 println!("{psp2:#?}");
+
+                let c1 = psp1.get_checksum().unwrap();
+                let c2 = psp2.get_checksum().unwrap();
+                if c1 != c2 {
+                    println!("images differ: checksum {c1:04x} != {c2:04x}");
+                }
             }
             Err(e) => {
                 println!("PSP2: {e}");

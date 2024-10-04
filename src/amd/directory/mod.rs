@@ -1,4 +1,5 @@
 use alloc::string::String;
+use alloc::string::ToString;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes};
 
@@ -27,10 +28,14 @@ impl<'a> Directory {
             b"$PSP" => PspDirectory::new(data).map(Self::Psp),
             b"2PSP" => PspComboDirectory::new(data).map(Self::PspCombo),
             b"$PL2" => PspDirectory::new(data).map(Self::PspLevel2),
-            unknown => Err(format!(
-                "unknown directory signature {:02x?}",
-                unknown.as_bytes()
-            )),
+            unknown => Err(format!("unknown directory signature {:02x?}", unknown)),
+        }
+    }
+
+    pub fn get_checksum(self: &Self) -> Result<u32, String> {
+        match self {
+            Directory::PspCombo(d) => Ok(d.header.checksum),
+            _ => Err("xxx".to_string()),
         }
     }
 }
