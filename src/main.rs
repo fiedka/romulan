@@ -7,8 +7,10 @@ use romulan::intel::{section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
-use std::{env, fs, io, mem, process, thread};
+use std::{fs, io, mem, thread};
 use uefi::guid::SECTION_LZMA_COMPRESS_GUID;
+
+const K: usize = 1024;
 
 /// Romulan the ROM analysis tool
 #[derive(Parser, Debug)]
@@ -66,7 +68,7 @@ fn dump_lzma(compressed_data: &[u8], padding: &str) {
 
     let status = child.wait().unwrap();
     if status.success() {
-        let len = data.len() / 1024;
+        let len = data.len() / K;
         println!("{padding}Decompressed: {len} K");
 
         for section in BiosSections::new(&data) {
@@ -82,7 +84,7 @@ fn dump_guid_defined(section_data: &[u8], padding: &str) {
     let data_offset = header.data_offset;
     let data = &section_data[(data_offset as usize)..];
     let guid = header.guid;
-    let len = data.len() / 1024;
+    let len = data.len() / K;
     println!("{padding}  {guid}: {len} K");
 
     #[allow(clippy::single_match)]
@@ -99,7 +101,7 @@ fn dump_section(section: &BiosSection, padding: &str) {
     let header = section.header();
     let kind = header.kind();
     let data = section.data();
-    let len = data.len() / 1024;
+    let len = data.len() / K;
     println!("{padding}{kind:?}:  {len} K");
 
     match kind {
@@ -119,7 +121,7 @@ fn dump_file(file: &BiosFile, polarity: bool, padding: &str) {
     let header = file.header();
     let guid = header.guid;
     let data = file.data();
-    let len = data.len() / 1024;
+    let len = data.len() / K;
     let kind = header.kind();
     let attributes = header.attributes();
     let alignment = header.alignment();
@@ -141,7 +143,7 @@ fn dump_volume(volume: &BiosVolume, padding: &str) {
     let header = volume.header();
     let guid = header.guid;
     let header_len = header.header_length;
-    let len = volume.data().len() / 1024;
+    let len = volume.data().len() / K;
     let attributes = header.attributes();
     println!("{padding}{guid}: {header_len}, {len} K");
     println!("{padding}  Attrib: {attributes:?}");
@@ -152,69 +154,84 @@ fn dump_volume(volume: &BiosVolume, padding: &str) {
     }
 }
 
-fn intel_analyze(data: &Vec<u8>) -> Result<(), String> {
-    let rom = intel::Rom::new(&data)?;
-    if rom.high_assurance_platform()? {
+fn print_intel(rom: &intel::Rom, do_print: bool, print_json: bool, verbose: bool) {
+    if let Ok(_) = rom.high_assurance_platform() {
         println!("  HAP: set");
     } else {
         println!("  HAP: not set");
     }
 
-    if let Some(bios) = rom.bios()? {
-        let len = bios.data().len() / 1024;
+    if let Ok(bios) = rom.bios() {
+        let len = bios.data().len() / K;
         println!("  BIOS: {len} K");
-        for volume in bios.volumes() {
-            dump_volume(&volume, "    ");
+        if verbose {
+            for volume in bios.volumes() {
+                dump_volume(&volume, "    ");
+            }
         }
     } else {
         println!("  BIOS: None");
     }
 
-    if let Some(me) = rom.me()? {
-        let len = me.data().len() / 1024;
+    if let Ok(me) = rom.me() {
+        let len = me.data().len() / K;
         println!("  ME: {len} K");
         let v = me.version().unwrap_or("Unknown".to_string());
         println!("    Version: {v}");
     } else {
         println!("  ME: None");
     }
-    Ok(())
 }
 
-fn amd_analyze(data: &Vec<u8>, do_print: bool, print_json: bool) -> Result<(), String> {
-    let rom = amd::Rom::new(&data)?;
-    if do_print {
-        println!("{:#?}", rom.efs())
-    }
+fn print_amd(rom: &amd::Rom, print_json: bool) {
     if print_json {
         // TODO: Wrap in EFS: {} or something
-        let j = serde_json::to_string_pretty(&rom.efs()).unwrap();
-        println!("{j}");
+        if let Ok(j) = serde_json::to_string_pretty(&rom.efs()) {
+            println!("{j}");
+        }
+    } else {
+        println!("{:#?}", rom.efs())
     }
-    Ok(())
+}
+
+fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom) {
+    // TODO: diff
 }
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
-    let file = args.file1;
-    println!("Scanning {file}");
-    let data = fs::read(file).unwrap();
-    let do_print = args.print || args.verbose;
+    let file1 = args.file1;
+    let data1 = fs::read(file1.clone()).unwrap();
+    let verbose = args.verbose;
+    let do_print = args.print || verbose;
     let print_json = args.json;
 
     if let Some(file2) = args.file2 {
+        println!("Diffing {file1} vs {file2}");
         let data2 = fs::read(file2).unwrap();
-        match amd_analyze(&data2, do_print, print_json) {
-            Ok(_) => {}
-            Err(_) => {}
+        let rom1 = amd::Rom::new(&data1).unwrap();
+        let rom2 = amd::Rom::new(&data2).unwrap();
+        if do_print {
+            print_amd(&rom1, print_json);
+            print_amd(&rom2, print_json);
         }
+        diff_amd(&rom1, &rom2);
     } else {
-        match intel_analyze(&data) {
-            Ok(_) => println!("Intel inside"),
+        println!("Scanning {file1}");
+        match intel::Rom::new(&data1) {
+            Ok(rom) => {
+                println!("Intel inside");
+                print_intel(&rom, do_print, print_json, verbose);
+            }
             Err(e) => println!("No Intel inside: {e}"),
         }
-        match amd_analyze(&data, do_print, print_json) {
-            Ok(_) => println!("AMD inside"),
+        match amd::Rom::new(&data1) {
+            Ok(rom) => {
+                println!("AMD inside");
+                if do_print {
+                    print_amd(&rom, print_json);
+                }
+            }
             Err(e) => println!("No AMD inside: {e}"),
         }
     }

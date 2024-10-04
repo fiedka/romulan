@@ -52,9 +52,8 @@ impl<'a> Rom<'a> {
             if data[i..i + 4] == [0x5a, 0xa5, 0xf0, 0x0f] {
                 return Ok(Rom {
                     data: &data[i - 16..],
-                    descriptor: plain::from_bytes(&data[i..]).map_err(|err| {
-                        format!("Flash descriptor invalid: {:?}", err)
-                    })?
+                    descriptor: plain::from_bytes(&data[i..])
+                        .map_err(|err| format!("Flash descriptor invalid: {:?}", err))?,
                 });
             }
 
@@ -76,24 +75,22 @@ impl<'a> Rom<'a> {
         let offset = (((self.descriptor.map0 >> 16) & 0xff) << 4) as usize;
 
         if offset >= self.data.len() {
-            return Err(format!("Flash region table truncated"))
+            return Err(format!("Flash region table truncated"));
         }
 
-        plain::from_bytes(&self.data[offset..]).map_err(|err| {
-            format!("Flash region table invalid: {:?}", err)
-        })
+        plain::from_bytes(&self.data[offset..])
+            .map_err(|err| format!("Flash region table invalid: {err:?}"))
     }
 
     pub fn flash_pchstrap(&self) -> Result<&'a flash::PchStrap, String> {
         let offset = (((self.descriptor.map1 >> 16) & 0xff) << 4) as usize;
 
         if offset >= self.data.len() {
-            return Err(format!("PCHSTRAP table truncated"))
+            return Err(format!("PCHSTRAP table truncated"));
         }
 
-        plain::from_bytes(&self.data[offset..]).map_err(|err| {
-            format!("PCHSTRAP table invalid: {:?}", err)
-        })
+        plain::from_bytes(&self.data[offset..])
+            .map_err(|err| format!("PCHSTRAP table invalid: {err:?}"))
     }
 
     pub fn high_assurance_platform(&self) -> Result<bool, String> {
@@ -101,7 +98,7 @@ impl<'a> Rom<'a> {
         Ok(pchstrap.data[0] & HAP == HAP)
     }
 
-    pub fn get_region_base_limit(&self, kind: RegionKind) -> Result<Option<(usize, usize)>, String> {
+    pub fn get_region_base_limit(&self, kind: RegionKind) -> Result<(usize, usize), String> {
         let frba = self.flash_region()?;
 
         let reg = frba.data[kind as usize];
@@ -109,41 +106,44 @@ impl<'a> Rom<'a> {
         let base_mask = 0x7fff;
         let limit_mask = base_mask << 16;
 
-    	let base = (reg & base_mask) << 12;
-    	let limit = ((reg & limit_mask) >> 4) | 0xfff;
+        let base = ((reg & base_mask) << 12) as usize;
+        let limit = (((reg & limit_mask) >> 4) | 0xfff) as usize;
 
         if limit > base {
-            Ok(Some((base as usize, limit as usize)))
+            Ok((base, limit))
         } else {
-            Ok(None)
+            Err(format!("region limit {limit} below base {base}"))
         }
     }
 
-    pub fn get_region(&self, kind: RegionKind) -> Result<Option<&'a [u8]>, String> {
-        if let Some((base, limit)) = self.get_region_base_limit(kind)? {
-            if (limit as usize) < self.data.len() {
-                Ok(Some(&self.data[base as usize..limit as usize + 1]))
-            } else {
-                Err(format!("{:?} region invalid: {} >= {}", kind, limit, self.data.len()))
+    pub fn get_region(&self, kind: RegionKind) -> Result<&'a [u8], String> {
+        match self.get_region_base_limit(kind) {
+            Ok((base, limit)) => {
+                let len = self.data.len();
+                if limit < len {
+                    Ok(&self.data[base..limit + 1])
+                } else {
+                    Err(format!(
+                        "{kind:?} region limit {limit} exceeds length {len}"
+                    ))
+                }
             }
-        } else {
-            Ok(None)
+            Err(e) => Err(e),
         }
     }
 
-    pub fn bios(&self) -> Result<Option<Bios<'a>>, String> {
-        if let Some(data) = self.get_region(RegionKind::Bios)? {
-            Ok(Some(Bios { data }))
-        } else {
-            Ok(None)
+    pub fn bios(&self) -> Result<Bios<'a>, String> {
+        let region = RegionKind::Bios;
+        match self.get_region(region) {
+            Ok(data) => Ok(Bios { data }),
+            Err(e) => Err(format!("could not get {region} region: {e}")),
         }
     }
 
-    pub fn me(&self) -> Result<Option<Me<'a>>, String> {
-        if let Some(data) = self.get_region(RegionKind::ManagementEngine)? {
-            Ok(Some(Me { data }))
-        } else {
-            Ok(None)
+    pub fn me(&self) -> Result<Me<'a>, String> {
+        match self.get_region(RegionKind::ManagementEngine) {
+            Ok(data) => Ok(Me { data }),
+            Err(e) => Err(e),
         }
     }
 }
@@ -173,10 +173,7 @@ pub struct BiosVolumes<'a> {
 
 impl<'a> BiosVolumes<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self {
-            data,
-            i: 0
-        }
+        Self { data, i: 0 }
     }
 }
 
@@ -191,6 +188,7 @@ impl<'a> Iterator for BiosVolumes<'a> {
             if header.valid() {
                 self.i += header.length as usize;
 
+                // TODO: What dis? :)
                 /*
                 self.i += mem::size_of::<volume::Header>();
 
@@ -210,7 +208,7 @@ impl<'a> Iterator for BiosVolumes<'a> {
 
                 return Some(BiosVolume {
                     header,
-                    data: &header_data[header.header_length as usize .. header.length as usize]
+                    data: &header_data[header.header_length as usize..header.length as usize],
                 });
             } else {
                 self.i += 8;
@@ -247,10 +245,7 @@ pub struct BiosFiles<'a> {
 
 impl<'a> BiosFiles<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self {
-            data,
-            i: 0
-        }
+        Self { data, i: 0 }
     }
 }
 
@@ -270,7 +265,7 @@ impl<'a> Iterator for BiosFiles<'a> {
 
                 Some(BiosFile {
                     header,
-                    data: &header_data[mem::size_of::<file::Header>() .. header.size()]
+                    data: &header_data[mem::size_of::<file::Header>()..header.size()],
                 })
             }
         } else {
@@ -305,10 +300,7 @@ pub struct BiosSections<'a> {
 
 impl<'a> BiosSections<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self {
-            data,
-            i: 0
-        }
+        Self { data, i: 0 }
     }
 }
 
@@ -324,12 +316,11 @@ impl<'a> Iterator for BiosSections<'a> {
                 self.i = self.data.len();
                 None
             } else {
-
                 self.i += ((header.size() + 3) / 4) * 4;
 
                 Some(BiosSection {
                     header,
-                    data: &header_data[mem::size_of::<section::Header>() .. header.size()]
+                    data: &header_data[mem::size_of::<section::Header>()..header.size()],
                 })
             }
         } else {
@@ -380,7 +371,7 @@ impl<'a> Me<'a> {
 
             let bytes = &self.data[i + 0x18..i + 0x20];
             for part in bytes.chunks(2) {
-                if ! version.is_empty() {
+                if !version.is_empty() {
                     version.push('.');
                 }
                 version.push_str(&format!("{}", part[0] as u16 | (part[1] as u16) << 8));
@@ -395,7 +386,12 @@ impl<'a> Me<'a> {
     pub fn modules(&self) -> Option<u32> {
         if self.data.len() >= 0x18 {
             let bytes = &self.data[0x14..0x18];
-            Some(bytes[0] as u32 | (bytes[1] as u32) << 8 | (bytes[2] as u32) << 16 | (bytes[3] as u32) << 24)
+            Some(
+                bytes[0] as u32
+                    | (bytes[1] as u32) << 8
+                    | (bytes[2] as u32) << 16
+                    | (bytes[3] as u32) << 24,
+            )
         } else {
             None
         }
