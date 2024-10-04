@@ -196,6 +196,18 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
 
 fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom) {
     // TODO: diff
+    match rom1.psp() {
+        Ok(psp1) => match rom2.psp() {
+            Ok(psp2) => {
+                println!("{psp1:#?}");
+                println!("{psp2:#?}");
+            }
+            Err(e) => {}
+        },
+        Err(e) => {
+            println!("PSP1: {e}");
+        }
+    }
 }
 
 fn main() -> io::Result<()> {

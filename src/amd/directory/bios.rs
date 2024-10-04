@@ -113,6 +113,8 @@ impl<'a> BiosDirectory {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[repr(C)]
 pub struct BiosComboDirectory {
     header: ComboDirectoryHeader,
     entries: Vec<ComboDirectoryEntry>,

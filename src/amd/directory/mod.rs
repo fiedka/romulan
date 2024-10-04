@@ -8,6 +8,7 @@ pub use self::psp::*;
 mod bios;
 mod psp;
 
+#[derive(Clone, Debug)]
 pub enum Directory {
     Bios(BiosDirectory),
     BiosCombo(BiosComboDirectory),
@@ -26,7 +27,10 @@ impl<'a> Directory {
             b"$PSP" => PspDirectory::new(data).map(Self::Psp),
             b"2PSP" => PspComboDirectory::new(data).map(Self::PspCombo),
             b"$PL2" => PspDirectory::new(data).map(Self::PspLevel2),
-            unknown => Err(format!("unknown directory signature {:X?}", unknown)),
+            unknown => Err(format!(
+                "unknown directory signature {:02x?}",
+                unknown.as_bytes()
+            )),
         }
     }
 }

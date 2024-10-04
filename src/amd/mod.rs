@@ -3,6 +3,7 @@
 use alloc::string::String;
 use core::mem;
 use serde::{Deserialize, Serialize};
+use zerocopy::AsBytes;
 use zerocopy::LayoutVerified;
 
 pub mod directory;
@@ -14,6 +15,8 @@ pub struct Rom<'a> {
     efs: flash::EFS,
 }
 
+const MAGIC: u32 = 0x55aa55aa;
+
 impl<'a> Rom<'a> {
     pub fn new(data: &'a [u8]) -> Result<Rom, String> {
         let mut i = 0;
@@ -24,13 +27,14 @@ impl<'a> Rom<'a> {
         */
         // TODO: Handle errors?
         while i + mem::size_of::<flash::EFS>() <= data.len() {
-            if data[i..i + 4] == [0xaa, 0x55, 0xaa, 0x55] {
+            let first4 = &data[i..i + 4];
+            if first4.eq(MAGIC.as_bytes()) {
                 let lv: LayoutVerified<_, flash::EFS> =
                     LayoutVerified::new_unaligned_from_prefix(&data[i..])
                         .unwrap()
                         .0;
                 return Ok(Rom {
-                    data: &data[i..],
+                    data: &data,
                     efs: *lv,
                     // .map_err(|err| format!("EFS invalid: {:?}", err))?,
                 });
@@ -48,5 +52,14 @@ impl<'a> Rom<'a> {
 
     pub fn efs(&self) -> flash::EFS {
         self.efs
+    }
+
+    pub fn psp(&self) -> Result<directory::Directory, String> {
+        let base = self.efs.psp as usize;
+        let s = &self.data[base..];
+        match directory::Directory::new(s) {
+            Ok(d) => Ok(d),
+            Err(e) => Err(format!("0x{base:08x}: {e}")),
+        }
     }
 }
