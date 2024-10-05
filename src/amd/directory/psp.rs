@@ -23,12 +23,16 @@ pub struct PspDirectoryEntry {
 
 const ADDR_MASK: usize = 0x3FFF_FFFF;
 
+#[derive(Debug)]
 pub enum AddrMode {
     PhysAddr,
     FlashOffset,
     DirHeaderOffset,
     PartitionOffset,
 }
+
+// FIXME: mask per SoC generation
+const MAPPING_MASK: usize = 0x00ff_ffff;
 
 impl PspDirectoryEntry {
     pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
@@ -37,7 +41,12 @@ impl PspDirectoryEntry {
             return Ok(value.to_le_bytes().to_vec().into_boxed_slice());
         }
 
-        let start = value;
+        let start = match self.addr_mode() {
+            AddrMode::PhysAddr => value & MAPPING_MASK,
+            AddrMode::FlashOffset => value,
+            _ => value,
+        };
+
         let end = start + self.size as usize;
         let l = data.len();
         if end <= l {
@@ -51,10 +60,11 @@ impl PspDirectoryEntry {
 
     pub fn display(&self) -> String {
         format!(
-            "{:02x}.{} ({})",
+            "{:02x}.{} ({}) @ 0x{:08x}",
             self.kind,
             self.sub_program,
-            self.description()
+            self.description(),
+            self.value
         )
     }
 
