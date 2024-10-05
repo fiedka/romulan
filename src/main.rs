@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use romulan::amd;
-use romulan::amd::directory::{Directory, PspComboDirectory, PspDirectory};
+use romulan::amd::directory::{Directory, PspDirectory, PspDirectoryEntry};
 use romulan::intel;
 use romulan::intel::{section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
@@ -155,7 +155,7 @@ fn dump_volume(volume: &BiosVolume, padding: &str) {
     }
 }
 
-fn print_intel(rom: &intel::Rom, do_print: bool, print_json: bool, verbose: bool) {
+fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
     if let Ok(_) = rom.high_assurance_platform() {
         println!("  HAP: set");
     } else {
@@ -197,40 +197,91 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
 
 const MAPPING_MASK: usize = 0x00ff_ffff;
 
+type PspAndData<'a> = (&'a Vec<Directory>, &'a [u8]);
+
+fn diff_psps(p1: PspAndData, p2: PspAndData) {
+    let (psp1, data1) = p1;
+    let (psp2, data2) = p2;
+
+    let es1 = psp1[0].get_entries().unwrap();
+    let es2 = psp2[0].get_entries().unwrap();
+    let ei2 = es2.iter().enumerate();
+
+    for (i, e) in ei2 {
+        let ex = es1[i];
+        println!("/ {e:?}\n\\ {ex:?}");
+        let b1 = MAPPING_MASK & ex.directory as usize;
+        let b2 = MAPPING_MASK & e.directory as usize;
+
+        let mut common = Vec::<(PspDirectoryEntry, PspDirectoryEntry)>::new();
+        let mut only_1 = Vec::<PspDirectoryEntry>::new();
+        let mut only_2 = Vec::<PspDirectoryEntry>::new();
+
+        let d1 = PspDirectory::new(&data1[b1..]).unwrap();
+        let d2 = PspDirectory::new(&data2[b2..]).unwrap();
+
+        for de in d1.entries.iter() {
+            match d2
+                .entries
+                .iter()
+                .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+            {
+                Some(e) => {
+                    common.push((e.clone(), de.clone()));
+                }
+                None => {
+                    only_1.push(de.clone());
+                }
+            }
+        }
+
+        for de in d2.entries.iter() {
+            if let None = d1
+                .entries
+                .iter()
+                .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+            {
+                only_2.push(de.clone());
+            }
+        }
+
+        for (e1, e2) in common.iter() {
+            print!("{} vs {}: ", e1.display(), e2.display());
+            match e1.data(&data1) {
+                Ok(d1) => {
+                    if let Ok(d2) = e2.data(&data2) {
+                        if d1.eq(&d2) {
+                            println!("same");
+                        } else {
+                            println!("different");
+                        }
+                    } else {
+                        println!("cannot get other entry");
+                    }
+                }
+                Err(e) => {
+                    println!("cannot get first entry: {e}");
+                }
+            }
+        }
+
+        println!("\nonly in 1:");
+        for e in only_1 {
+            println!("- {}", e.display());
+        }
+
+        println!("\nonly in 2:");
+        for e in only_2 {
+            println!("- {}", e.display());
+        }
+        println!();
+    }
+}
+
 fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     match rom1.psp() {
         Ok(psp1) => match rom2.psp() {
             Ok(psp2) => {
-                println!("\n  1:");
-                for p in &psp1 {
-                    if let Ok(es) = p.get_entries() {
-                        for e in es {
-                            println!("- {e:?}");
-                            let b = MAPPING_MASK & e.directory as usize;
-                            if let Ok(d) = PspDirectory::new(&rom1.data()[b..]) {
-                                for de in d.entries {
-                                    println!("{}", de.description());
-                                }
-                            }
-                        }
-                    }
-                }
-
-                println!("\n  2:");
-                for p in &psp2 {
-                    if let Ok(es) = p.get_entries() {
-                        for e in es {
-                            println!("- {e:?}");
-                            let b = MAPPING_MASK & e.directory as usize;
-                            if let Ok(d) = PspDirectory::new(&rom2.data()[b..]) {
-                                for de in d.entries {
-                                    println!("{}", de.description());
-                                }
-                            }
-                        }
-                    }
-                }
-
                 let psp1len = psp1.len();
                 let psp2len = psp2.len();
                 println!("{psp1len} vs {psp2len}");
@@ -242,6 +293,7 @@ fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 let c2 = psp2[0].get_checksum().unwrap();
                 if c1 != c2 {
                     println!("images differ: checksum {c1:04x} != {c2:04x}");
+                    diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()));
                 }
             }
             Err(e) => {
@@ -276,8 +328,10 @@ fn main() -> io::Result<()> {
         println!("Scanning {file1}");
         match intel::Rom::new(&data1) {
             Ok(rom) => {
-                println!("Intel inside");
-                print_intel(&rom, do_print, print_json, verbose);
+                if do_print {
+                    println!("Intel inside");
+                    print_intel(&rom, print_json, verbose);
+                }
             }
             Err(e) => println!("No Intel inside: {e}"),
         }

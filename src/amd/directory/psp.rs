@@ -14,38 +14,58 @@ pub struct PspDirectoryEntry {
     pub sub_program: u8,
     /// 0x02: specifies which ROM contains the entry
     pub rom_id: u8,
-    pub rsvd_03: u8,
+    pub _03: u8,
     /// 0x04: size of the entry
     pub size: u32,
-    /// 0x08: location or value of the entry
+    /// 0x08: address mode and location or value of the entry
     pub value: u64,
+}
+
+const ADDR_MASK: usize = 0x3FFF_FFFF;
+
+pub enum AddrMode {
+    PhysAddr,
+    FlashOffset,
+    DirHeaderOffset,
+    PartitionOffset,
 }
 
 impl PspDirectoryEntry {
     pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
+        let value = (self.value as usize) & ADDR_MASK;
         if self.size == 0xFFFFFFFF {
-            return Ok(vec![
-                (self.value) as u8,
-                (self.value >> 8) as u8,
-                (self.value >> (2 * 8)) as u8,
-                (self.value >> (3 * 8)) as u8,
-                (self.value >> (4 * 8)) as u8,
-                (self.value >> (5 * 8)) as u8,
-                (self.value >> (6 * 8)) as u8,
-                (self.value >> (7 * 8)) as u8,
-            ]
-            .into_boxed_slice());
+            return Ok(value.to_le_bytes().to_vec().into_boxed_slice());
         }
 
-        let start = (self.value & 0x1FFFFFF) as usize;
+        let start = value;
         let end = start + self.size as usize;
-        if end <= data.len() {
+        let l = data.len();
+        if end <= l {
             Ok(data[start..end].to_vec().into_boxed_slice())
         } else {
             Err(format!(
-                "PSP directory entry invalid: {:08X}:{:08X}",
-                start, end
+                "PSP directory entry invalid: {start:08X}:{end:08X} within {l:08x}"
             ))
+        }
+    }
+
+    pub fn display(&self) -> String {
+        format!(
+            "{:02x}.{} ({})",
+            self.kind,
+            self.sub_program,
+            self.description()
+        )
+    }
+
+    // https://doc.coreboot.org/soc/amd/psp_integration.html#psp-directory-table-entries
+    pub fn addr_mode(&self) -> AddrMode {
+        match self.value >> 62 {
+            0 => AddrMode::PhysAddr,
+            1 => AddrMode::FlashOffset,
+            2 => AddrMode::DirHeaderOffset,
+            3 => AddrMode::PartitionOffset,
+            _ => unreachable!(),
         }
     }
 
@@ -156,14 +176,6 @@ impl<'a> PspDirectory {
         }
 
         Err(format!("PSP directory header not found"))
-    }
-
-    pub fn header(&self) -> DirectoryHeader {
-        self.header
-    }
-
-    pub fn entries(&self) -> Vec<PspDirectoryEntry> {
-        self.entries.clone()
     }
 }
 

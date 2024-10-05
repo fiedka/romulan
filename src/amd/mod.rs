@@ -60,10 +60,10 @@ impl<'a> Rom<'a> {
         let mut dirs = Vec::<directory::Directory>::new();
 
         // TODO: Better deal with the mapping cleanly.
-        let b1 = self.efs.psp_legacy as usize & 0x00ff_ffff;
+        // let b1 = self.efs.psp_legacy as usize & 0x00ff_ffff;
         let b2 = self.efs.psp as usize;
 
-        for b in [b1, b2] {
+        for b in [b2] {
             if b == 0 {
                 continue;
             }
