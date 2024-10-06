@@ -278,30 +278,102 @@ fn diff_psps(p1: PspAndData, p2: PspAndData) {
     }
 }
 
+fn get_real_addr(addr: u32) -> Option<u32> {
+    if addr == 0x0000_0000 || addr == 0xffff_ffff {
+        None
+    } else {
+        Some(addr)
+    }
+}
+
+fn diff_addr(a1: Option<u32>, a2: Option<u32>) -> String {
+    if a1.is_none() && a2.is_none() {
+        "both empty".to_string()
+    } else {
+        if a1.is_none() {
+            let a = a2.unwrap();
+            format!("first is empty, other is {a:08x}")
+        } else if a2.is_none() {
+            let a = a1.unwrap();
+            format!("first is {a:08x}, other is empty")
+        } else {
+            let a1 = a1.unwrap();
+            let a2 = a2.unwrap();
+            if a1 != a2 {
+                format!("first is {a1:08x}, other is {a2:08x}")
+            } else {
+                format!("both equal {a1:08x}")
+            }
+        }
+    }
+}
+
+fn diff_efs(rom1: &amd::Rom, rom2: &amd::Rom) {
+    let efs1 = rom1.efs();
+    let efs2 = rom2.efs();
+    // TODO: IMC, GBE, XHCI, Promontory, LP Promontory, SPI flash
+
+    let a1 = get_real_addr(efs1.bios_17_00_0f);
+    let a2 = get_real_addr(efs2.bios_17_00_0f);
+    let diff = diff_addr(a1, a2);
+    println!("Fam 17 Model 00-0f BIOS: {diff}");
+
+    let a1 = get_real_addr(efs1.bios_17_10_1f);
+    let a2 = get_real_addr(efs2.bios_17_10_1f);
+    let diff = diff_addr(a1, a2);
+    println!("Fam 17 Model 00-0f BIOS: {diff}");
+
+    let a1 = get_real_addr(efs1.bios_17_30_3f_19_00_0f);
+    let a2 = get_real_addr(efs2.bios_17_30_3f_19_00_0f);
+    let diff = diff_addr(a1, a2);
+    println!("Fam 17 Model 30-0f + Fam 19 Model 00-0f BIOS: {diff}");
+
+    let a1 = get_real_addr(efs1.bios_17_60);
+    let a2 = get_real_addr(efs2.bios_17_60);
+    let diff = diff_addr(a1, a2);
+    println!("Fam 17 Model 60+ BIOS: {diff}");
+
+    let a1 = get_real_addr(efs1.psp_legacy);
+    let a2 = get_real_addr(efs2.psp_legacy);
+    let diff = diff_addr(a1, a2);
+    println!("PSP legacy: {diff}");
+
+    let a1 = get_real_addr(efs1.psp);
+    let a2 = get_real_addr(efs2.psp);
+    let diff = diff_addr(a1, a2);
+    println!("PSP modern: {diff}");
+}
+
 fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
-    match rom1.psp() {
-        Ok(psp1) => match rom2.psp() {
-            Ok(psp2) => {
-                let psp1len = psp1.len();
-                let psp2len = psp2.len();
-                println!("{psp1len} vs {psp2len}");
-                if verbose {
-                    println!("{psp1:#?}");
-                    println!("{psp2:#?}");
+    println!();
+    diff_efs(rom1, rom2);
+    println!();
+
+    if verbose {
+        match rom1.psp() {
+            Ok(psp1) => match rom2.psp() {
+                Ok(psp2) => {
+                    let psp1len = psp1.len();
+                    let psp2len = psp2.len();
+                    println!("{psp1len} vs {psp2len}");
+                    if verbose {
+                        println!("{psp1:#?}");
+                        println!("{psp2:#?}");
+                    }
+                    let c1 = psp1[0].get_checksum().unwrap();
+                    let c2 = psp2[0].get_checksum().unwrap();
+                    if c1 != c2 {
+                        println!("images differ: checksum {c1:04x} != {c2:04x}");
+                        diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()));
+                    }
                 }
-                let c1 = psp1[0].get_checksum().unwrap();
-                let c2 = psp2[0].get_checksum().unwrap();
-                if c1 != c2 {
-                    println!("images differ: checksum {c1:04x} != {c2:04x}");
-                    diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()));
+                Err(e) => {
+                    println!("PSP2: {e}");
                 }
-            }
+            },
             Err(e) => {
-                println!("PSP2: {e}");
+                println!("PSP1: {e}");
             }
-        },
-        Err(e) => {
-            println!("PSP1: {e}");
         }
     }
 }

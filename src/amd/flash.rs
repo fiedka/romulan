@@ -25,7 +25,7 @@ pub struct EFS {
     /// 0x24: bit 0 is set to 0 if this is a second generation structure
     pub second_gen: u32,
     /// 0x28: BIOS directory for family 17 model 60 and later
-    pub bios: u32,
+    pub bios_17_60: u32,
     pub _2c: u32,
     /// 0x30: promontory firmware
     pub promontory: u32,
