@@ -199,7 +199,7 @@ const MAPPING_MASK: usize = 0x00ff_ffff;
 
 type PspAndData<'a> = (&'a Vec<Directory>, &'a [u8]);
 
-fn diff_psps(p1: PspAndData, p2: PspAndData) {
+fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let (psp1, data1) = p1;
     let (psp2, data2) = p2;
 
@@ -209,72 +209,79 @@ fn diff_psps(p1: PspAndData, p2: PspAndData) {
 
     for (i, e) in ei2 {
         let ex = es1[i];
-        println!("/ {e:?}\n\\ {ex:?}");
-        let b1 = MAPPING_MASK & ex.directory as usize;
-        let b2 = MAPPING_MASK & e.directory as usize;
+        println!(
+            "> {i}: Combo dir {:08x} @ {:08x} vs {:08x} @ {:08x}",
+            e.id, e.directory, ex.id, ex.directory
+        );
+        println!();
 
-        let mut common = Vec::<(PspDirectoryEntry, PspDirectoryEntry)>::new();
-        let mut only_1 = Vec::<PspDirectoryEntry>::new();
-        let mut only_2 = Vec::<PspDirectoryEntry>::new();
+        if verbose {
+            let b1 = MAPPING_MASK & ex.directory as usize;
+            let b2 = MAPPING_MASK & e.directory as usize;
 
-        let d1 = PspDirectory::new(&data1[b1..]).unwrap();
-        let d2 = PspDirectory::new(&data2[b2..]).unwrap();
+            let mut common = Vec::<(PspDirectoryEntry, PspDirectoryEntry)>::new();
+            let mut only_1 = Vec::<PspDirectoryEntry>::new();
+            let mut only_2 = Vec::<PspDirectoryEntry>::new();
 
-        for de in d1.entries.iter() {
-            match d2
-                .entries
-                .iter()
-                .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
-            {
-                Some(e) => {
-                    common.push((e.clone(), de.clone()));
-                }
-                None => {
-                    only_1.push(de.clone());
-                }
-            }
-        }
+            let d1 = PspDirectory::new(&data1[b1..]).unwrap();
+            let d2 = PspDirectory::new(&data2[b2..]).unwrap();
 
-        for de in d2.entries.iter() {
-            if let None = d1
-                .entries
-                .iter()
-                .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
-            {
-                only_2.push(de.clone());
-            }
-        }
-
-        for (e1, e2) in common.iter() {
-            print!("{} vs {}: ", e1.display(), e2.display());
-            match e1.data(&data1) {
-                Ok(d1) => {
-                    if let Ok(d2) = e2.data(&data2) {
-                        if d1.eq(&d2) {
-                            println!("same");
-                        } else {
-                            println!("different");
-                        }
-                    } else {
-                        println!("cannot get other entry");
+            for de in d1.entries.iter() {
+                match d2
+                    .entries
+                    .iter()
+                    .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+                {
+                    Some(e) => {
+                        common.push((e.clone(), de.clone()));
+                    }
+                    None => {
+                        only_1.push(de.clone());
                     }
                 }
-                Err(e) => {
-                    println!("cannot get first entry: {e}");
+            }
+
+            for de in d2.entries.iter() {
+                if let None = d1
+                    .entries
+                    .iter()
+                    .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+                {
+                    only_2.push(de.clone());
                 }
             }
-        }
 
-        println!("\nonly in 1:");
-        for e in only_1 {
-            println!("- {}", e.display());
-        }
+            for (e1, e2) in common.iter() {
+                print!("{} vs {}: ", e1.display(), e2.display());
+                match e1.data(&data1) {
+                    Ok(d1) => {
+                        if let Ok(d2) = e2.data(&data2) {
+                            if d1.eq(&d2) {
+                                println!("same");
+                            } else {
+                                println!("different");
+                            }
+                        } else {
+                            println!("cannot get other entry");
+                        }
+                    }
+                    Err(e) => {
+                        println!("cannot get first entry: {e}");
+                    }
+                }
+            }
 
-        println!("\nonly in 2:");
-        for e in only_2 {
-            println!("- {}", e.display());
+            println!("\nonly in 1:");
+            for e in only_1 {
+                println!("- {}", e.display());
+            }
+
+            println!("\nonly in 2:");
+            for e in only_2 {
+                println!("- {}", e.display());
+            }
+            println!();
         }
-        println!();
     }
 }
 
@@ -308,72 +315,91 @@ fn diff_addr(a1: Option<u32>, a2: Option<u32>) -> String {
     }
 }
 
+// TODO: SPI flash configuration
 fn diff_efs(rom1: &amd::Rom, rom2: &amd::Rom) {
     let efs1 = rom1.efs();
     let efs2 = rom2.efs();
-    // TODO: IMC, GBE, XHCI, Promontory, LP Promontory, SPI flash
+
+    let a1 = get_real_addr(efs1.imc_fw);
+    let a2 = get_real_addr(efs2.imc_fw);
+    let diff = diff_addr(a1, a2);
+    println!("IMC Firmware                                  {diff}");
+
+    let a1 = get_real_addr(efs1.gbe_fw);
+    let a2 = get_real_addr(efs2.gbe_fw);
+    let diff = diff_addr(a1, a2);
+    println!("Gigabit ethernet firmware                     {diff}");
+
+    let a1 = get_real_addr(efs1.xhci_fw);
+    let a2 = get_real_addr(efs2.xhci_fw);
+    let diff = diff_addr(a1, a2);
+    println!("XHCI firmware                                 {diff}");
 
     let a1 = get_real_addr(efs1.bios_17_00_0f);
     let a2 = get_real_addr(efs2.bios_17_00_0f);
     let diff = diff_addr(a1, a2);
-    println!("Fam 17 Model 00-0f BIOS: {diff}");
+    println!("Fam 17 Model 00-0f BIOS                       {diff}");
 
     let a1 = get_real_addr(efs1.bios_17_10_1f);
     let a2 = get_real_addr(efs2.bios_17_10_1f);
     let diff = diff_addr(a1, a2);
-    println!("Fam 17 Model 00-0f BIOS: {diff}");
+    println!("Fam 17 Model 00-0f BIOS                       {diff}");
 
     let a1 = get_real_addr(efs1.bios_17_30_3f_19_00_0f);
     let a2 = get_real_addr(efs2.bios_17_30_3f_19_00_0f);
     let diff = diff_addr(a1, a2);
-    println!("Fam 17 Model 30-0f + Fam 19 Model 00-0f BIOS: {diff}");
+    println!("Fam 17 Model 30-0f + Fam 19 Model 00-0f BIOS  {diff}");
 
     let a1 = get_real_addr(efs1.bios_17_60);
     let a2 = get_real_addr(efs2.bios_17_60);
     let diff = diff_addr(a1, a2);
-    println!("Fam 17 Model 60+ BIOS: {diff}");
+    println!("Fam 17 Model 60+ BIOS                         {diff}");
 
     let a1 = get_real_addr(efs1.psp_legacy);
     let a2 = get_real_addr(efs2.psp_legacy);
     let diff = diff_addr(a1, a2);
-    println!("PSP legacy: {diff}");
+    println!("PSP legacy                                    {diff}");
 
     let a1 = get_real_addr(efs1.psp);
     let a2 = get_real_addr(efs2.psp);
     let diff = diff_addr(a1, a2);
-    println!("PSP modern: {diff}");
+    println!("PSP modern                                    {diff}");
+
+    let a1 = get_real_addr(efs1.promontory);
+    let a2 = get_real_addr(efs2.promontory);
+    let diff = diff_addr(a1, a2);
+    println!("Promontory firmware                           {diff}");
+
+    let a1 = get_real_addr(efs1.lp_promontory);
+    let a2 = get_real_addr(efs2.lp_promontory);
+    let diff = diff_addr(a1, a2);
+    println!("LP Promontory firmware                        {diff}");
 }
 
-fn diff_amd(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
-    println!();
-    diff_efs(rom1, rom2);
-    println!();
-
-    if verbose {
-        match rom1.psp() {
-            Ok(psp1) => match rom2.psp() {
-                Ok(psp2) => {
-                    let psp1len = psp1.len();
-                    let psp2len = psp2.len();
-                    println!("{psp1len} vs {psp2len}");
-                    if verbose {
-                        println!("{psp1:#?}");
-                        println!("{psp2:#?}");
-                    }
-                    let c1 = psp1[0].get_checksum().unwrap();
-                    let c2 = psp2[0].get_checksum().unwrap();
-                    if c1 != c2 {
-                        println!("images differ: checksum {c1:04x} != {c2:04x}");
-                        diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()));
-                    }
+fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
+    match rom1.psp() {
+        Ok(psp1) => match rom2.psp() {
+            Ok(psp2) => {
+                let psp1len = psp1.len();
+                let psp2len = psp2.len();
+                println!("{psp1len} vs {psp2len}");
+                if verbose {
+                    println!("{psp1:#?}");
+                    println!("{psp2:#?}");
                 }
-                Err(e) => {
-                    println!("PSP2: {e}");
+                let c1 = psp1[0].get_checksum().unwrap();
+                let c2 = psp2[0].get_checksum().unwrap();
+                if c1 != c2 {
+                    println!("images differ: checksum {c1:04x} != {c2:04x}");
+                    diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()), verbose);
                 }
-            },
-            Err(e) => {
-                println!("PSP1: {e}");
             }
+            Err(e) => {
+                println!("PSP2: {e}");
+            }
+        },
+        Err(e) => {
+            println!("PSP1: {e}");
         }
     }
 }
@@ -395,7 +421,10 @@ fn main() -> io::Result<()> {
             print_amd(&rom1, print_json);
             print_amd(&rom2, print_json);
         }
-        diff_amd(&rom1, &rom2, verbose);
+        println!();
+        diff_efs(&rom1, &rom2);
+        println!();
+        diff_psp(&rom1, &rom2, verbose);
     } else {
         println!("Scanning {file1}");
         match intel::Rom::new(&data1) {
