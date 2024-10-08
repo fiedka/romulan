@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
+use core::fmt::{self, Display};
 use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes, LayoutVerified as LV};
@@ -22,6 +23,19 @@ pub struct BiosDirectoryEntry {
     pub source: u64,
     /// 0x10: destination address
     pub destination: u64,
+}
+
+impl Display for BiosDirectoryEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:02x}.{} ({}) @ 0x{:08x}",
+            self.kind,
+            self.sub_program,
+            self.description(),
+            self.source
+        )
+    }
 }
 
 impl BiosDirectoryEntry {

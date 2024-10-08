@@ -1,3 +1,5 @@
+use core::fmt::{self, Display};
+
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
@@ -106,4 +108,10 @@ pub struct ComboDirectoryEntry {
     pub id: u32,
     /// 0x08: Address of directory
     pub directory: u64,
+}
+
+impl Display for ComboDirectoryEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:08x} @ {:08x}", self.id, self.directory)
+    }
 }
