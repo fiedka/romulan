@@ -216,7 +216,7 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let l1 = es1.len();
     let l2 = es2.len();
     if l1 != l2 {
-        println!("PSP directories have different lengths: {l1} vs {l2}");
+        println!("PSP directories have different lengths: {l1} vs {l2}; not comparing");
         return;
     }
 
@@ -257,39 +257,39 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
             }
 
             for de in d2.entries.iter() {
-                if let None = d1
+                if d1
                     .entries
                     .iter()
                     .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+                    .is_none()
                 {
                     only_2.push(de.clone());
                 }
             }
 
             for (e1, e2) in common.iter() {
-                print!("{e1} vs {e2}: ");
-                match e1.data(&data1) {
+                let r = match e1.data(&data1) {
                     Ok(d1) => {
                         if let Ok(d2) = e2.data(&data2) {
                             if d1.eq(&d2) {
-                                println!("same");
+                                "same".to_string()
                             } else {
-                                println!("different");
+                                "different".to_string()
                             }
                         } else {
-                            println!("cannot get other entry");
+                            "cannot get other entry".to_string()
                         }
                     }
-                    Err(e) => {
-                        println!("cannot get first entry: {e}");
-                    }
-                }
+                    Err(e) => format!("cannot get first entry: {e}"),
+                };
+                println!("{e1} vs {e2}: {r}");
             }
 
-            println!("\nonly in 1:");
+            println!();
+            println!("only in 1:");
             print_dir(&only_1);
-
-            println!("\nonly in 2:");
+            println!();
+            println!("only in 2:");
             print_dir(&only_2);
             println!();
         }
@@ -406,8 +406,8 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 let c2 = psp2.get_checksum().unwrap();
                 if c1 != c2 {
                     println!("legacy PSP checksums differ: {c1:04x} {c2:04x}");
-                } else {
                     diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()), verbose);
+                } else {
                     println!("legacy PSP checksums equal");
                     print_dir(&psp1.get_psp_entries().unwrap());
                 }
