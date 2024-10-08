@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
+use core::fmt::{self, Display};
 use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes, LayoutVerified as LV};
@@ -34,6 +35,19 @@ pub enum AddrMode {
 // FIXME: mask per SoC generation
 const MAPPING_MASK: usize = 0x00ff_ffff;
 
+impl Display for PspDirectoryEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:02x}.{} ({}) @ 0x{:08x}",
+            self.kind,
+            self.sub_program,
+            self.description(),
+            self.value
+        )
+    }
+}
+
 impl PspDirectoryEntry {
     pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
         let value = (self.value as usize) & ADDR_MASK;
@@ -56,16 +70,6 @@ impl PspDirectoryEntry {
                 "PSP directory entry invalid: {start:08X}:{end:08X} within {l:08x}"
             ))
         }
-    }
-
-    pub fn display(&self) -> String {
-        format!(
-            "{:02x}.{} ({}) @ 0x{:08x}",
-            self.kind,
-            self.sub_program,
-            self.description(),
-            self.value
-        )
     }
 
     // https://doc.coreboot.org/soc/amd/psp_integration.html#psp-directory-table-entries

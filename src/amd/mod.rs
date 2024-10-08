@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
 use alloc::string::String;
-use alloc::vec::Vec;
 use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::AsBytes;
@@ -18,6 +17,20 @@ pub struct Rom<'a> {
 
 const MAGIC: u32 = 0x55aa55aa;
 const STEP_SIZE: usize = 0x1000;
+
+const MAPPING_MASK: usize = 0x00ff_ffff;
+
+fn get_dir(addr: usize, data: &[u8]) -> Result<directory::Directory, String> {
+    // TODO: Better deal with the mapping cleanly.
+    let base = addr & MAPPING_MASK;
+    if base == 0 || base == MAPPING_MASK {
+        return Err(format!("0x{base:08x}: empty"));
+    }
+    match directory::Directory::new(&data[base..]) {
+        Ok(d) => Ok(d),
+        Err(e) => Err(format!("0x{base:08x}: {e}")),
+    }
+}
 
 impl<'a> Rom<'a> {
     pub fn new(data: &'a [u8]) -> Result<Rom, String> {
@@ -56,27 +69,11 @@ impl<'a> Rom<'a> {
         self.efs
     }
 
-    pub fn psp(&self) -> Result<Vec<directory::Directory>, String> {
-        let mut dirs = Vec::<directory::Directory>::new();
+    pub fn psp_legacy(&self) -> Result<directory::Directory, String> {
+        get_dir(self.efs.psp_legacy as usize, &self.data)
+    }
 
-        // TODO: Better deal with the mapping cleanly.
-        // let b1 = self.efs.psp_legacy as usize & 0x00ff_ffff;
-        let b2 = self.efs.psp as usize;
-
-        for b in [b2] {
-            if b == 0 {
-                continue;
-            }
-            let s = &self.data[b..];
-            match directory::Directory::new(s) {
-                Ok(d) => {
-                    dirs.push(d);
-                }
-                Err(e) => {
-                    return Err(format!("0x{b:08x}: {e}"));
-                }
-            }
-        }
-        Ok(dirs)
+    pub fn psp(&self) -> Result<directory::Directory, String> {
+        get_dir(self.efs.psp as usize, &self.data)
     }
 }

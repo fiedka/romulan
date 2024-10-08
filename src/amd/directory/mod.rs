@@ -44,23 +44,25 @@ impl<'a> Directory {
         }
     }
 
-    pub fn get_entries(self: &Self) -> Result<Vec<ComboDirectoryEntry>, String> {
+    pub fn get_combo_entries(self: &Self) -> Result<&Vec<ComboDirectoryEntry>, String> {
         match self {
-            Directory::BiosCombo(d) => {
-                let mut es = Vec::<ComboDirectoryEntry>::new();
-                for e in d.entries() {
-                    es.push(e)
-                }
-                Ok(es)
-            }
-            Directory::PspCombo(d) => {
-                let mut es = Vec::<ComboDirectoryEntry>::new();
-                for e in d.entries() {
-                    es.push(e)
-                }
-                Ok(es)
-            }
+            Directory::BiosCombo(d) => Ok(&d.entries),
+            Directory::PspCombo(d) => Ok(&d.entries),
             _ => Err("not a combo directory".to_string()),
+        }
+    }
+
+    pub fn get_bios_entries(self: &Self) -> Result<&Vec<BiosDirectoryEntry>, String> {
+        match self {
+            Directory::Bios(d) => Ok(&d.entries),
+            _ => Err("not a BIOS directory".to_string()),
+        }
+    }
+
+    pub fn get_psp_entries(self: &Self) -> Result<&Vec<PspDirectoryEntry>, String> {
+        match self {
+            Directory::Psp(d) => Ok(&d.entries),
+            _ => Err("not a PSP directory".to_string()),
         }
     }
 }
