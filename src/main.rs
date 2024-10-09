@@ -195,10 +195,22 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
     }
 }
 
-fn print_dir(dir: &Vec<PspDirectoryEntry>) {
+fn print_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
     for e in dir {
         println!("- {e}");
+        if e.kind == 0x40 {
+            let b = MAPPING_MASK & e.value as usize;
+            let d = PspDirectory::new(&data[b..]).unwrap();
+            println!("| {d}");
+            print_dir(&d.entries, data);
+            println!("| {d}");
+        }
     }
+}
+
+pub enum Comparison {
+    Diff,
+    Same,
 }
 
 fn diff_psp_entry(
@@ -206,13 +218,13 @@ fn diff_psp_entry(
     e2: &PspDirectoryEntry,
     data1: &[u8],
     data2: &[u8],
-) -> Result<String, String> {
+) -> Result<Comparison, String> {
     let d1 = e1.data(&data1).unwrap();
     let d2 = e2.data(&data2).unwrap();
     if d1.eq(&d2) {
-        Ok("same".to_string())
+        Ok(Comparison::Same)
     } else {
-        Ok("different".to_string())
+        Ok(Comparison::Diff)
     }
 }
 
@@ -249,24 +261,26 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
 
     if !common.is_empty() {
         for (e1, e2) in common.iter() {
-            let r = match diff_psp_entry(&e1, &e2, &data1, &data2) {
-                Ok(r) => r,
-                Err(e) => e,
+            match diff_psp_entry(&e1, &e2, &data1, &data2) {
+                Ok(r) => match r {
+                    Comparison::Same => println!("= {e1} vs {e2}"),
+                    Comparison::Diff => println!("≠ {e1} vs {e2}"),
+                },
+                Err(e) => println!("⚠️ {e1} vs {e2}: {e}"),
             };
-            println!("=? {e1} vs {e2}: {r}");
         }
         println!();
     }
 
     if !only_1.is_empty() {
         println!("only in 1:");
-        print_dir(&only_1);
+        print_dir(&only_1, data1);
         println!();
     }
 
     if !only_2.is_empty() {
         println!("only in 2:");
-        print_dir(&only_2);
+        print_dir(&only_2, data2);
         println!();
     }
 }
@@ -285,10 +299,26 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
 
     let l1 = es1.len();
     let l2 = es2.len();
+
     if l1 != l2 {
-        println!("PSP directories have different lengths: {l1} vs {l2}; not comparing");
+        println!("Not comparing {psp1} vs {psp2}: different number of entries: {l1} vs {l2}");
+        println!();
+        println!("1:");
+        print_psp_dirs(psp1, data1);
+        println!("2:");
+        print_psp_dirs(psp2, data2);
         return;
     }
+
+    let c1 = psp1.get_checksum();
+    let c2 = psp2.get_checksum();
+    let cs = if c1 != c2 {
+        format!("differ: {c1:04x} {c2:04x}")
+    } else {
+        "equal".to_string()
+    };
+    println!("Comparing {psp1} vs {psp2}, {l1} entries each, checksums {cs}");
+    println!();
 
     let ei2 = es2.iter().enumerate();
 
@@ -406,7 +436,7 @@ fn print_psp_dirs(psp: &Directory, data: &[u8]) {
         let base = MAPPING_MASK & d.directory as usize;
         println!("dir @ {base:08x}");
         let dir = PspDirectory::new(&data[base..]).unwrap();
-        print_dir(&dir.entries);
+        print_dir(&dir.entries, data);
         println!();
     }
 }
@@ -415,13 +445,6 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     match rom1.psp_legacy() {
         Ok(psp1) => match rom2.psp_legacy() {
             Ok(psp2) => {
-                let c1 = psp1.get_checksum().unwrap();
-                let c2 = psp2.get_checksum().unwrap();
-                if c1 != c2 {
-                    println!("legacy PSP checksums differ: {c1:04x} {c2:04x}");
-                } else {
-                    println!("legacy PSP checksums equal");
-                }
                 diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()), verbose);
             }
             Err(e) => {
@@ -429,7 +452,7 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 match psp1.get_psp_entries() {
                     Ok(dir) => {
                         println!("# legacy PSP 1:");
-                        print_dir(&dir);
+                        print_dir(&dir, rom1.data());
                     }
                     Err(e) => println!("# legacy PSP 1: {e}"),
                 }
@@ -442,7 +465,7 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 Ok(psp2) => match psp2.get_psp_entries() {
                     Ok(dir) => {
                         println!("# legacy PSP 2:");
-                        print_dir(&dir);
+                        print_dir(&dir, rom2.data());
                     }
                     Err(e) => println!("# legacy PSP 2: {e}"),
                 },
@@ -456,13 +479,6 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     match rom1.psp() {
         Ok(psp1) => match rom2.psp() {
             Ok(psp2) => {
-                let c1 = psp1.get_checksum().unwrap();
-                let c2 = psp2.get_checksum().unwrap();
-                if c1 != c2 {
-                    println!("# PSP checksums differ: {c1:04x} {c2:04x}");
-                } else {
-                    println!("# PSP checksums equal");
-                }
                 diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()), verbose);
             }
             Err(e) => {

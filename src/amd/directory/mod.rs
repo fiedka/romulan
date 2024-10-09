@@ -1,8 +1,8 @@
-use core::fmt::{self, Display};
-
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::fmt::{self, Display};
+use core::str;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes};
 
@@ -22,6 +22,14 @@ pub enum Directory {
     PspCombo(PspComboDirectory),
 }
 
+impl Display for Directory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let b = self.get_magic().to_le_bytes();
+        let m = str::from_utf8(&b).unwrap();
+        write!(f, "{m}",)
+    }
+}
+
 impl<'a> Directory {
     pub fn new(data: &'a [u8]) -> Result<Self, String> {
         match &data[..4] {
@@ -35,14 +43,25 @@ impl<'a> Directory {
         }
     }
 
-    pub fn get_checksum(self: &Self) -> Result<u32, String> {
+    pub fn get_checksum(self: &Self) -> u32 {
         match self {
-            Directory::Bios(d) => Ok(d.header.checksum),
-            Directory::BiosCombo(d) => Ok(d.header.checksum),
-            Directory::BiosLevel2(d) => Ok(d.header.checksum),
-            Directory::Psp(d) => Ok(d.header.checksum),
-            Directory::PspCombo(d) => Ok(d.header.checksum),
-            Directory::PspLevel2(d) => Ok(d.header.checksum),
+            Directory::Bios(d) => d.header.checksum,
+            Directory::BiosCombo(d) => d.header.checksum,
+            Directory::BiosLevel2(d) => d.header.checksum,
+            Directory::Psp(d) => d.header.checksum,
+            Directory::PspCombo(d) => d.header.checksum,
+            Directory::PspLevel2(d) => d.header.checksum,
+        }
+    }
+
+    pub fn get_magic(self: &Self) -> u32 {
+        match self {
+            Directory::Bios(d) => d.header.magic,
+            Directory::BiosCombo(d) => d.header.magic,
+            Directory::BiosLevel2(d) => d.header.magic,
+            Directory::Psp(d) => d.header.magic,
+            Directory::PspCombo(d) => d.header.magic,
+            Directory::PspLevel2(d) => d.header.magic,
         }
     }
 

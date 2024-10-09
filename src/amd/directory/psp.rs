@@ -170,6 +170,16 @@ pub struct PspDirectory {
     pub entries: Vec<PspDirectoryEntry>,
 }
 
+impl Display for PspDirectory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:08x} ({:08x}) {} entries",
+            self.header.magic, self.header.checksum, self.header.entries
+        )
+    }
+}
+
 impl<'a> PspDirectory {
     pub fn new(data: &'a [u8]) -> Result<Self, String> {
         if &data[..4] == b"$PSP" || &data[..4] == b"$PL2" {
