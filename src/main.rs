@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use romulan::amd;
-use romulan::amd::directory::{Directory, PspDirectory, PspDirectoryEntry};
+use romulan::amd::directory::{BiosDirectoryEntry, Directory, PspDirectory, PspDirectoryEntry};
 use romulan::intel;
 use romulan::intel::{section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
@@ -184,6 +184,47 @@ fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
     }
 }
 
+fn print_bios_dir_entry(entry: &BiosDirectoryEntry) {
+    let BiosDirectoryEntry {
+        kind,
+        region_kind,
+        flags,
+        sub_program,
+        size,
+        source,
+        destination,
+    } = entry;
+    let desc = entry.description();
+    println!("* Type {kind:02X} Region {region_kind:02X} Flags {flags:02X} SubProg {sub_program:02X} Size {size:08X} Source {source:016X} Dest {destination:016X}: {desc}");
+}
+
+fn print_bios_dir(base: usize, data: &[u8]) {
+    let b = MAPPING_MASK & base;
+    match Directory::new(&data[b..]) {
+        Ok(Directory::Bios(directory)) => {
+            println!("{b:08x}: BIOS Directory");
+            for entry in directory.entries() {
+                print_bios_dir_entry(&entry);
+            }
+        }
+        Ok(Directory::BiosCombo(combo)) => {
+            println!("{b:08x}: BIOS Combo Directory");
+            for entry in combo.entries() {
+                println!("{:08x}", entry.directory);
+                print_bios_dir(entry.directory as usize, data);
+            }
+        }
+        Ok(Directory::BiosLevel2(directory)) => {
+            println!("{b:08x}: BIOS Level 2 Directory");
+            for entry in directory.entries() {
+                print_bios_dir_entry(&entry);
+            }
+        }
+        Err(e) => println!("{e}"),
+        _ => println!("??"),
+    }
+}
+
 fn print_amd(rom: &amd::Rom, print_json: bool) {
     if print_json {
         // TODO: Wrap in EFS: {} or something
@@ -191,7 +232,22 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
             println!("{j}");
         }
     } else {
-        println!("{:#?}", rom.efs())
+        let efs = rom.efs();
+        println!("{efs:#?}");
+        let dirs = [
+            efs.bios_17_00_0f,
+            efs.bios_17_10_1f,
+            efs.bios_17_30_3f_19_00_0f,
+            efs.bios_17_60,
+        ];
+        let data = rom.data();
+        for (i, dir) in dirs.iter().enumerate() {
+            if *dir != 0x0000_0000 && *dir != 0xffff_ffff {
+                print_bios_dir(*dir as usize, data);
+            } else {
+                println!("{i}: no BIOS dir @ {dir:08x}");
+            }
+        }
     }
 }
 
@@ -240,7 +296,7 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
             .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
         {
             Some(e) => {
-                common.push((e.clone(), de.clone()));
+                common.push((de.clone(), e.clone()));
             }
             None => {
                 only_1.push(de.clone());
@@ -260,6 +316,7 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
     }
 
     if !common.is_empty() {
+        println!("common:");
         for (e1, e2) in common.iter() {
             match diff_psp_entry(&e1, &e2, &data1, &data2) {
                 Ok(r) => match r {
@@ -268,6 +325,16 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
                 },
                 Err(e) => println!("⚠️ {e1} vs {e2}: {e}"),
             };
+            // TODO: cleaner...
+            if e1.kind == 0x40 {
+                let b1 = MAPPING_MASK & e1.value as usize;
+                let d1 = PspDirectory::new(&data1[b1..]).unwrap();
+                let b2 = MAPPING_MASK & e2.value as usize;
+                let d2 = PspDirectory::new(&data2[b2..]).unwrap();
+                println!("> SUB DIR");
+                diff_psp_dirs(&d1, &d2, data1, data2);
+                println!("< SUB DIR");
+            }
         }
         println!();
     }

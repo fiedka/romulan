@@ -90,14 +90,18 @@ impl PspDirectoryEntry {
             0x02 => "PSP Secure OS",
             0x03 => "PSP Recovery Boot Loader",
             0x04 => "PSP Non-volatile Data",
+            0x06 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x08 => "SMU Firmware",
             0x09 => "AMD Secure Debug Key",
             0x0A => "OEM Public Key",
             0x0B => "PSP Soft Fuse Chain",
             0x0C => "PSP Trustlet",
             0x0D => "PSP Trustlet Public Key",
+            0x10 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x12 => "SMU Firmware",
             0x13 => "PSP Early Secure Unlock Debug",
+            0x14 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
+            0x1A => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x20 => "IP Discovery",
             0x21 => "Wrapped iKEK",
             0x22 => "PSP Token Unlock",
@@ -156,6 +160,7 @@ impl PspDirectoryEntry {
             0x59 => "DMCU-ISR",
             0x5A => "MSMU Binary 0",
             0x5B => "MSMU Binary 1",
+            0x5F => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x73 => "PSP Boot Loader AB",
             0x80 => "OEM Sys-TA",
             0x81 => "OEM Sys-TA Signing Key",
@@ -182,7 +187,8 @@ impl Display for PspDirectory {
 
 impl<'a> PspDirectory {
     pub fn new(data: &'a [u8]) -> Result<Self, String> {
-        if &data[..4] == b"$PSP" || &data[..4] == b"$PL2" {
+        let m = &data[..4];
+        if m == b"$PSP" || m == b"$PL2" {
             let header =
                 DirectoryHeader::read_from_prefix(data).ok_or("PSP directory header invalid")?;
 
@@ -199,7 +205,7 @@ impl<'a> PspDirectory {
             });
         }
 
-        Err(format!("PSP directory header not found"))
+        Err(format!("PSP directory header not found: {m:02x?}"))
     }
 }
 
