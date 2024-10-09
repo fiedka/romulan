@@ -201,6 +201,76 @@ fn print_dir(dir: &Vec<PspDirectoryEntry>) {
     }
 }
 
+fn diff_psp_entry(
+    e1: &PspDirectoryEntry,
+    e2: &PspDirectoryEntry,
+    data1: &[u8],
+    data2: &[u8],
+) -> Result<String, String> {
+    let d1 = e1.data(&data1).unwrap();
+    let d2 = e2.data(&data2).unwrap();
+    if d1.eq(&d2) {
+        Ok("same".to_string())
+    } else {
+        Ok("different".to_string())
+    }
+}
+
+fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: &[u8]) {
+    let mut common = Vec::<(PspDirectoryEntry, PspDirectoryEntry)>::new();
+    let mut only_1 = Vec::<PspDirectoryEntry>::new();
+    let mut only_2 = Vec::<PspDirectoryEntry>::new();
+
+    for de in dir1.entries.iter() {
+        match dir2
+            .entries
+            .iter()
+            .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+        {
+            Some(e) => {
+                common.push((e.clone(), de.clone()));
+            }
+            None => {
+                only_1.push(de.clone());
+            }
+        }
+    }
+
+    for de in dir2.entries.iter() {
+        if dir1
+            .entries
+            .iter()
+            .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+            .is_none()
+        {
+            only_2.push(de.clone());
+        }
+    }
+
+    if !common.is_empty() {
+        for (e1, e2) in common.iter() {
+            let r = match diff_psp_entry(&e1, &e2, &data1, &data2) {
+                Ok(r) => r,
+                Err(e) => e,
+            };
+            println!("=? {e1} vs {e2}: {r}");
+        }
+        println!();
+    }
+
+    if !only_1.is_empty() {
+        println!("only in 1:");
+        print_dir(&only_1);
+        println!();
+    }
+
+    if !only_2.is_empty() {
+        println!("only in 2:");
+        print_dir(&only_2);
+        println!();
+    }
+}
+
 const MAPPING_MASK: usize = 0x00ff_ffff;
 
 type PspAndData<'a> = (&'a Directory, &'a [u8]);
@@ -229,73 +299,12 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
 
         if verbose {
             let b1 = MAPPING_MASK & ex.directory as usize;
-            let b2 = MAPPING_MASK & e.directory as usize;
-
-            let mut common = Vec::<(PspDirectoryEntry, PspDirectoryEntry)>::new();
-            let mut only_1 = Vec::<PspDirectoryEntry>::new();
-            let mut only_2 = Vec::<PspDirectoryEntry>::new();
-
             let d1 = PspDirectory::new(&data1[b1..]).unwrap();
+
+            let b2 = MAPPING_MASK & e.directory as usize;
             let d2 = PspDirectory::new(&data2[b2..]).unwrap();
 
-            for de in d1.entries.iter() {
-                match d2
-                    .entries
-                    .iter()
-                    .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
-                {
-                    Some(e) => {
-                        common.push((e.clone(), de.clone()));
-                    }
-                    None => {
-                        only_1.push(de.clone());
-                    }
-                }
-            }
-
-            for de in d2.entries.iter() {
-                if d1
-                    .entries
-                    .iter()
-                    .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
-                    .is_none()
-                {
-                    only_2.push(de.clone());
-                }
-            }
-
-            if !common.is_empty() {
-                for (e1, e2) in common.iter() {
-                    let r = match e1.data(&data1) {
-                        Ok(d1) => {
-                            if let Ok(d2) = e2.data(&data2) {
-                                if d1.eq(&d2) {
-                                    "same".to_string()
-                                } else {
-                                    "different".to_string()
-                                }
-                            } else {
-                                "cannot get other entry".to_string()
-                            }
-                        }
-                        Err(e) => format!("cannot get first entry: {e}"),
-                    };
-                    println!("{e1} vs {e2}: {r}");
-                }
-                println!();
-            }
-
-            if !only_1.is_empty() {
-                println!("only in 1:");
-                print_dir(&only_1);
-                println!();
-            }
-
-            if !only_2.is_empty() {
-                println!("only in 2:");
-                print_dir(&only_2);
-                println!();
-            }
+            diff_psp_dirs(&d1, &d2, data1, data2);
         }
     }
 }
