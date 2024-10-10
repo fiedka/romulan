@@ -25,15 +25,23 @@ pub struct BiosDirectoryEntry {
     pub destination: u64,
 }
 
+// TODO: region kind, flags
 impl Display for BiosDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let d = self.destination;
+        let dest = if d == 0xffff_ffff_ffff_ffff || d == 0x0000_0000_0000_0000 {
+            String::from("")
+        } else {
+            format!(" -> {:08x}", self.destination)
+        };
+        let desc = self.description();
+        let size = self.size;
+        let src = self.source;
+        let kind = self.kind;
+        let sub = self.sub_program;
         write!(
             f,
-            "{:02x}.{} ({}) @ 0x{:08x}",
-            self.kind,
-            self.sub_program,
-            self.description(),
-            self.source
+            "{kind:02x}.{sub} {desc:40} {size:08x} @ 0x{src:08x}{dest}"
         )
     }
 }

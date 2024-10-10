@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use romulan::amd;
-use romulan::amd::directory::{BiosDirectoryEntry, Directory, PspDirectory, PspDirectoryEntry};
+use romulan::amd::directory::{Directory, PspDirectory, PspDirectoryEntry};
 use romulan::intel;
 use romulan::intel::{section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
@@ -184,28 +184,15 @@ fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
     }
 }
 
-fn print_bios_dir_entry(entry: &BiosDirectoryEntry) {
-    let BiosDirectoryEntry {
-        kind,
-        region_kind,
-        flags,
-        sub_program,
-        size,
-        source,
-        destination,
-    } = entry;
-    let desc = entry.description();
-    println!("* Type {kind:02X} Region {region_kind:02X} Flags {flags:02X} SubProg {sub_program:02X} Size {size:08X} Source {source:016X} Dest {destination:016X}: {desc}");
-}
-
 fn print_bios_dir(base: usize, data: &[u8]) {
     let b = MAPPING_MASK & base;
     match Directory::new(&data[b..]) {
         Ok(Directory::Bios(directory)) => {
             println!("{b:08x}: BIOS Directory");
             for entry in directory.entries() {
-                print_bios_dir_entry(&entry);
+                println!("{entry}");
             }
+            println!();
         }
         Ok(Directory::BiosCombo(combo)) => {
             println!("{b:08x}: BIOS Combo Directory");
@@ -217,8 +204,9 @@ fn print_bios_dir(base: usize, data: &[u8]) {
         Ok(Directory::BiosLevel2(directory)) => {
             println!("{b:08x}: BIOS Level 2 Directory");
             for entry in directory.entries() {
-                print_bios_dir_entry(&entry);
+                println!("{entry}");
             }
+            println!();
         }
         Err(e) => println!("{e}"),
         _ => println!("??"),
