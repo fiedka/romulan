@@ -25,7 +25,7 @@ pub struct BiosDirectoryEntry {
     pub destination: u64,
 }
 
-// TODO: region kind, flags
+// TODO: flags
 impl Display for BiosDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let d = self.destination;
@@ -39,9 +39,11 @@ impl Display for BiosDirectoryEntry {
         let src = self.source;
         let kind = self.kind;
         let sub = self.sub_program;
+        let rk = self.region_kind;
+        let fl = self.flags;
         write!(
             f,
-            "{kind:02x}.{sub} {desc:40} {size:08x} @ 0x{src:08x}{dest}"
+            "{kind:02x}.{sub:02x}.{rk:02x} {desc:50} {fl:08b} {size:08x} @ 0x{src:08x}{dest}"
         )
     }
 }
@@ -92,6 +94,7 @@ impl BiosDirectoryEntry {
             0x67 => "Machine Check Exception Data",
             0x68 => "AGESA PSP Customization Block Backup",
             0x6A => "MP2 Firmware",
+            0x6D => "Maybe NVAR (seen in ASRock A520M-HVS/A52MIX_2.73)",
             0x70 => "BIOS Level 2 Directory",
             _ => "Unknown",
         }

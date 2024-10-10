@@ -188,25 +188,28 @@ fn print_bios_dir(base: usize, data: &[u8]) {
     let b = MAPPING_MASK & base;
     match Directory::new(&data[b..]) {
         Ok(Directory::Bios(directory)) => {
+            println!();
             println!("{b:08x}: BIOS Directory");
             for entry in directory.entries() {
                 println!("{entry}");
+                if entry.kind == 0x70 {
+                    print_bios_dir(entry.source as usize, data);
+                }
             }
-            println!();
         }
         Ok(Directory::BiosCombo(combo)) => {
+            println!();
             println!("{b:08x}: BIOS Combo Directory");
             for entry in combo.entries() {
-                println!("{:08x}", entry.directory);
                 print_bios_dir(entry.directory as usize, data);
             }
         }
         Ok(Directory::BiosLevel2(directory)) => {
+            println!();
             println!("{b:08x}: BIOS Level 2 Directory");
             for entry in directory.entries() {
                 println!("{entry}");
             }
-            println!();
         }
         Err(e) => println!("{e}"),
         _ => println!("??"),
@@ -233,6 +236,7 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
             if *dir != 0x0000_0000 && *dir != 0xffff_ffff {
                 print_bios_dir(*dir as usize, data);
             } else {
+                println!();
                 println!("{i}: no BIOS dir @ {dir:08x}");
             }
         }
