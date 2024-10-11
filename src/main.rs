@@ -224,32 +224,6 @@ const BIOS_DIR_NAMES: [&str; 4] = [
     "BIOS directory for family 17 model 60 and later",
 ];
 
-fn print_spi_15_60_6f(efs: &EFS) {
-    let mode = efs.spi_mode_15_60_6f;
-    let speed = efs.spi_speed_15_60_6f;
-    let xx = efs._42;
-    let msx = format!("mode {mode:02x} speed {speed:02x} xx {xx:02x}");
-    println!(" SPI Fam 15 Models 60-6f         {msx}");
-}
-
-fn print_spi_17_00_1f(efs: &EFS) {
-    let mode = efs.spi_mode_17_00_1f;
-    let speed = efs.spi_speed_17_00_1f;
-    let micron = efs.micron_17_00_1f;
-    let xx = efs._46;
-    let msx = format!("mode {mode:02x} speed {speed:02x} micron {micron:02x} xx {xx:02x}");
-    println!(" SPI Fam 17 Models 00-1f         {msx}");
-}
-
-fn print_spi_17_30(efs: &EFS) {
-    let mode = efs.spi_mode_17_30;
-    let speed = efs.spi_speed_17_30;
-    let micron = efs.micron_17_30;
-    let xx = efs._4a;
-    let msx = format!("mode {mode:02x} speed {speed:02x} micron {micron:02x} xx {xx:02x}");
-    println!(" SPI Fam 17 Models 30 and later  {msx}");
-}
-
 fn print_efs(efs: &EFS) {
     println!(": EFS :");
     let gen2 = efs.second_gen;
@@ -280,9 +254,9 @@ fn print_efs(efs: &EFS) {
     println!(" LP Promontory firmware                        {a:08x?}");
     println!();
     println!(":: SPI flash configuration ::");
-    print_spi_15_60_6f(&efs);
-    print_spi_17_00_1f(&efs);
-    print_spi_17_30(&efs);
+    println!(" SPI Fam 15 Models 60-6f         {}", efs.spi_cfg_15_60_6f);
+    println!(" SPI Fam 17 Models 00-1f         {}", efs.spi_cfg_17_00_1f);
+    println!(" SPI Fam 17 Models 30 and later  {}", efs.spi_cfg_17_30);
 }
 
 fn print_amd(rom: &amd::Rom, print_json: bool) {

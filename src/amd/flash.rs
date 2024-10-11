@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+use alloc::string::ToString;
+use core::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
@@ -44,25 +46,130 @@ pub struct EFS {
     pub _3c: u32,
 
     /* SPI flash */
-    /// 0x40: SPI mode for family 15 models 60 to 6f
-    pub spi_mode_15_60_6f: u8,
-    /// 0x41: SPI speed for family 15 models 60 to 6f
-    pub spi_speed_15_60_6f: u8,
+    /// 0x40: SPI flash configuration for family 15 models 60 to 6f
+    pub spi_cfg_15_60_6f: SpiCfg,
     pub _42: u8,
-
-    /// 0x43: SPI mode for family 17 models 00 to 1f
-    pub spi_mode_17_00_1f: u8,
-    /// 0x44: SPI speed for family 17 models 00 to 1f
-    pub spi_speed_17_00_1f: u8,
-    /// 0x45: Micron flag (0x0A for Micron, 0xFF otherwise) for family 17 models 00 to 1f
-    pub micron_17_00_1f: u8,
+    /// 0x43: SPI flash configuration for family 17 models 00 to 1f
+    pub spi_cfg_17_00_1f: SpiCfg2,
     pub _46: u8,
-
-    /// 0x47: SPI mode for family 17 model 30 and later
-    pub spi_mode_17_30: u8,
-    /// 0x48: SPI speed for family 17 model 30 and later
-    pub spi_speed_17_30: u8,
-    /// 0x49: Micron flag (0xAA for Micron, 0x55 for automatic) for family 17 model 30 and later
-    pub micron_17_30: u8,
+    /// 0x47: SPI flash configuration for family 17 model 30 and later
+    pub spi_cfg_17_30: SpiCfg3,
     pub _4a: u8,
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct SpiMode(u8);
+
+impl Display for SpiMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self.0 {
+            0 => "(0, yet unseen)".to_string(),
+            1 => "(1, yet unseen)".to_string(),
+            2 => "(2, yet unseen)".to_string(),
+            3 => "(3, yet unseen)".to_string(),
+            4 => "(4, yet unseen)".to_string(),
+            5 => "(5, seen frequently)".to_string(),
+            _ => format!("unknown ({:02x})", self.0),
+        };
+        write!(f, "{s:20}")
+    }
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct SpiSpeed(u8);
+
+impl Display for SpiSpeed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self.0 {
+            0 => "66.66Mhz".to_string(),
+            1 => "33.33Mhz".to_string(),
+            2 => "22.22Mhz".to_string(),
+            3 => "16.66MHz".to_string(),
+            4 => "100MHz".to_string(),
+            5 => "800KHz".to_string(),
+            _ => format!("unknown ({:02x})", self.0),
+        };
+        write!(f, "{s:12}")
+    }
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct Micron(u8);
+
+impl Display for Micron {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self.0 {
+            0x0A => "Micron".to_string(),
+            0xFF => "no Micron".to_string(),
+            _ => format!("unknown ({:02x})", self.0),
+        };
+        write!(f, "{s}")
+    }
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct Micron2(u8);
+
+impl Display for Micron2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self.0 {
+            0xAA => "Micron".to_string(),
+            0x55 => "automatic".to_string(),
+            _ => format!("unknown ({:02x})", self.0),
+        };
+        write!(f, "{s}")
+    }
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct SpiCfg {
+    pub mode: SpiMode,
+    pub speed: SpiSpeed,
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct SpiCfg2 {
+    pub mode: SpiMode,
+    pub speed: SpiSpeed,
+    pub micron: Micron,
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct SpiCfg3 {
+    pub mode: SpiMode,
+    pub speed: SpiSpeed,
+    pub micron: Micron2,
+}
+
+impl Display for SpiCfg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "mode: {} speed: {}", self.mode, self.speed)
+    }
+}
+
+impl Display for SpiCfg2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "mode: {} speed: {} micron: {}",
+            self.mode, self.speed, self.micron
+        )
+    }
+}
+
+impl Display for SpiCfg3 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "mode: {} speed: {} micron: {}",
+            self.mode, self.speed, self.micron
+        )
+    }
 }
