@@ -11,15 +11,18 @@ pub struct EFS {
     /// 0x00: Magic of EFS (0x55AA55AA)
     pub magic: u32,
 
+    /* Special firmware */
     pub imc_fw: u32,
     pub gbe_fw: u32,
     pub xhci_fw: u32,
 
+    /* PSP */
     /// 0x10: PSP directory for ...
     pub psp_legacy: u32,
     /// 0x14: PSP directory for family 17 models 00 and later
-    pub psp: u32,
+    pub psp_17_00: u32,
 
+    /* "BIOS" */
     /// 0x18: BIOS directory for family 17 models 00 to 0f
     pub bios_17_00_0f: u32,
     /// 0x1c: BIOS directory for family 17 models 10 to 1f
@@ -32,12 +35,14 @@ pub struct EFS {
     pub bios_17_60: u32,
     pub _2c: u32,
 
+    /* Promontory */
     /// 0x30: promontory firmware
     pub promontory: u32,
     /// 0x34: low power promontory firmware
     pub lp_promontory: u32,
     pub _38: u32,
     pub _3c: u32,
+
     /* SPI flash */
     /// 0x40: SPI mode for family 15 models 60 to 6f
     pub spi_mode_15_60_6f: u8,

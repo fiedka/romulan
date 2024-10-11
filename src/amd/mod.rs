@@ -73,7 +73,7 @@ impl<'a> Rom<'a> {
         get_dir(self.efs.psp_legacy as usize, &self.data)
     }
 
-    pub fn psp(&self) -> Result<directory::Directory, String> {
-        get_dir(self.efs.psp as usize, &self.data)
+    pub fn psp_17_00(&self) -> Result<directory::Directory, String> {
+        get_dir(self.efs.psp_17_00 as usize, &self.data)
     }
 }

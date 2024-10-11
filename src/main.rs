@@ -3,6 +3,7 @@
 use clap::Parser;
 use romulan::amd;
 use romulan::amd::directory::{Directory, PspDirectory, PspDirectoryEntry};
+use romulan::amd::flash::EFS;
 use romulan::intel;
 use romulan::intel::{section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
@@ -216,6 +217,74 @@ fn print_bios_dir(base: usize, data: &[u8]) {
     }
 }
 
+const BIOS_DIR_NAMES: [&str; 4] = [
+    "BIOS directory for family 17 models 00 to 0f",
+    "BIOS directory for family 17 models 10 to 1f",
+    "BIOS directory for family 17 models 30 to 3f and family 19 models 00 to 0f",
+    "BIOS directory for family 17 model 60 and later",
+];
+
+fn print_spi_15_60_6f(efs: &EFS) {
+    let mode = efs.spi_mode_15_60_6f;
+    let speed = efs.spi_speed_15_60_6f;
+    let xx = efs._42;
+    let msx = format!("mode {mode:02x} speed {speed:02x} xx {xx:02x}");
+    println!(" SPI Fam 15 Models 60-6f         {msx}");
+}
+
+fn print_spi_17_00_1f(efs: &EFS) {
+    let mode = efs.spi_mode_17_00_1f;
+    let speed = efs.spi_speed_17_00_1f;
+    let micron = efs.micron_17_00_1f;
+    let xx = efs._46;
+    let msx = format!("mode {mode:02x} speed {speed:02x} micron {micron:02x} xx {xx:02x}");
+    println!(" SPI Fam 17 Models 00-1f         {msx}");
+}
+
+fn print_spi_17_30(efs: &EFS) {
+    let mode = efs.spi_mode_17_30;
+    let speed = efs.spi_speed_17_30;
+    let micron = efs.micron_17_30;
+    let xx = efs._4a;
+    let msx = format!("mode {mode:02x} speed {speed:02x} micron {micron:02x} xx {xx:02x}");
+    println!(" SPI Fam 17 Models 30 and later  {msx}");
+}
+
+fn print_efs(efs: &EFS) {
+    println!(": EFS :");
+    let gen2 = efs.second_gen;
+    let is_gen2 = gen2 & 0x1 == 0;
+    println!(":: Second gen? {is_gen2}");
+    println!(":: Firmware ::");
+    let a = get_real_addr(efs.imc_fw);
+    println!(" IMC Firmware                                  {a:?}");
+    let a = get_real_addr(efs.gbe_fw);
+    println!(" Gigabit ethernet firmware                     {a:?}");
+    let a = get_real_addr(efs.xhci_fw);
+    println!(" XHCI firmware                                 {a:?}");
+    let a = get_real_addr(efs.bios_17_00_0f);
+    println!(" Fam 17 Model 00-0f BIOS                       {a:?}");
+    let a = get_real_addr(efs.bios_17_10_1f);
+    println!(" Fam 17 Model 00-0f BIOS                       {a:?}");
+    let a = get_real_addr(efs.bios_17_30_3f_19_00_0f);
+    println!(" Fam 17 Model 30-0f + Fam 19 Model 00-0f BIOS  {a:?}");
+    let a = get_real_addr(efs.bios_17_60);
+    println!(" Fam 17 Model 60+ BIOS                         {a:?}");
+    let a = get_real_addr(efs.psp_legacy);
+    println!(" PSP legacy                                    {a:?}");
+    let a = get_real_addr(efs.psp_17_00);
+    println!(" PSP modern                                    {a:?}");
+    let a = get_real_addr(efs.promontory);
+    println!(" Promontory firmware                           {a:?}");
+    let a = get_real_addr(efs.lp_promontory);
+    println!(" LP Promontory firmware                        {a:?}");
+    println!();
+    println!(":: SPI flash configuration ::");
+    print_spi_15_60_6f(&efs);
+    print_spi_17_00_1f(&efs);
+    print_spi_17_30(&efs);
+}
+
 fn print_amd(rom: &amd::Rom, print_json: bool) {
     if print_json {
         // TODO: Wrap in EFS: {} or something
@@ -223,34 +292,42 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
             println!("{j}");
         }
     } else {
+        let data = rom.data();
         let efs = rom.efs();
-        println!("{efs:#?}");
+
+        println!();
+        print_efs(&efs);
+        println!();
+        println!(": Directories :");
+        println!();
+        println!(":: BIOS ::");
         let dirs = [
             efs.bios_17_00_0f,
             efs.bios_17_10_1f,
             efs.bios_17_30_3f_19_00_0f,
             efs.bios_17_60,
         ];
-        let data = rom.data();
         for (i, dir) in dirs.iter().enumerate() {
+            println!();
+            println!("=== {} ===", BIOS_DIR_NAMES[i]);
             if *dir != 0x0000_0000 && *dir != 0xffff_ffff {
                 print_bios_dir(*dir as usize, data);
             } else {
                 println!();
-                println!("{i}: no BIOS dir @ {dir:08x}");
+                println!("no BIOS dir @ {dir:08x}");
             }
         }
     }
 }
 
-fn print_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
+fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
     for e in dir {
         println!("- {e}");
         if e.kind == 0x40 {
             let b = MAPPING_MASK & e.value as usize;
             let d = PspDirectory::new(&data[b..]).unwrap();
             println!("| {d}");
-            print_dir(&d.entries, data);
+            print_psp_dir(&d.entries, data);
             println!("| {d}");
         }
     }
@@ -333,13 +410,13 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
 
     if !only_1.is_empty() {
         println!("only in 1:");
-        print_dir(&only_1, data1);
+        print_psp_dir(&only_1, data1);
         println!();
     }
 
     if !only_2.is_empty() {
         println!("only in 2:");
-        print_dir(&only_2, data2);
+        print_psp_dir(&only_2, data2);
         println!();
     }
 }
@@ -473,8 +550,8 @@ fn diff_efs(rom1: &amd::Rom, rom2: &amd::Rom) {
     let diff = diff_addr(a1, a2);
     println!("PSP legacy                                    {diff}");
 
-    let a1 = get_real_addr(efs1.psp);
-    let a2 = get_real_addr(efs2.psp);
+    let a1 = get_real_addr(efs1.psp_17_00);
+    let a2 = get_real_addr(efs2.psp_17_00);
     let diff = diff_addr(a1, a2);
     println!("PSP modern                                    {diff}");
 
@@ -495,7 +572,7 @@ fn print_psp_dirs(psp: &Directory, data: &[u8]) {
         let base = MAPPING_MASK & d.directory as usize;
         println!("dir @ {base:08x}");
         let dir = PspDirectory::new(&data[base..]).unwrap();
-        print_dir(&dir.entries, data);
+        print_psp_dir(&dir.entries, data);
         println!();
     }
 }
@@ -511,7 +588,7 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 match psp1.get_psp_entries() {
                     Ok(dir) => {
                         println!("# legacy PSP 1:");
-                        print_dir(&dir, rom1.data());
+                        print_psp_dir(&dir, rom1.data());
                     }
                     Err(e) => println!("# legacy PSP 1: {e}"),
                 }
@@ -524,7 +601,7 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 Ok(psp2) => match psp2.get_psp_entries() {
                     Ok(dir) => {
                         println!("# legacy PSP 2:");
-                        print_dir(&dir, rom2.data());
+                        print_psp_dir(&dir, rom2.data());
                     }
                     Err(e) => println!("# legacy PSP 2: {e}"),
                 },
@@ -535,8 +612,8 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     println!();
 
     // modern PSP
-    match rom1.psp() {
-        Ok(psp1) => match rom2.psp() {
+    match rom1.psp_17_00() {
+        Ok(psp1) => match rom2.psp_17_00() {
             Ok(psp2) => {
                 diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()), verbose);
             }
@@ -548,7 +625,7 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
         },
         Err(e) => {
             println!("# PSP 1: {e}");
-            match rom2.psp() {
+            match rom2.psp_17_00() {
                 Ok(psp2) => {
                     println!("# PSP 2:");
                     print_psp_dirs(&psp2, rom2.data());
@@ -573,7 +650,9 @@ fn main() -> io::Result<()> {
         let rom1 = amd::Rom::new(&data1).unwrap();
         let rom2 = amd::Rom::new(&data2).unwrap();
         if verbose {
+            println!(": Image 1 :");
             print_amd(&rom1, print_json);
+            println!(": Image 2 :");
             print_amd(&rom2, print_json);
         }
         println!();
