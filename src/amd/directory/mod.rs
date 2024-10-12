@@ -120,9 +120,6 @@ pub struct ComboDirectoryHeader {
     /// 0x0c: 0 for dynamic look up through all entries,
     ///       1 for PSP or chip ID match.
     /// Only for PSP combo directory
-    /// coreboot util/amdfwtool says:
-    ///    0 - Compare PSP ID,
-    ///    1 - Compare chip family ID
     pub look_up_mode: u32,
     pub rsvd_10: u32,
     pub rsvd_14: u32,
@@ -149,7 +146,7 @@ impl Display for ComboDirectoryHeader {
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ComboDirectoryEntry {
-    /// 0x00: 0 to compare PSP ID, 1 to compare chip ID
+    /// 0x00: 0 to compare PSP ID, 1 to compare chip family ID
     pub id_select: u32,
     /// 0x04: PSP or chip ID
     pub id: u32,
@@ -159,6 +156,11 @@ pub struct ComboDirectoryEntry {
 
 impl Display for ComboDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:08x} @ {:08x}", self.id, self.directory)
+        let sel = if self.id_select == 0 {
+            "PSP ID"
+        } else {
+            "Fam ID"
+        };
+        write!(f, "{sel} {:08x} @ {:08x}", self.id, self.directory)
     }
 }
