@@ -73,6 +73,7 @@ impl PspDirectoryEntry {
     }
 
     // https://doc.coreboot.org/soc/amd/psp_integration.html#psp-directory-table-entries
+    // coreboot util/amdfwtool/amdfwtool.h
     pub fn addr_mode(&self) -> AddrMode {
         match self.value >> 62 {
             0 => AddrMode::PhysAddr,
@@ -90,6 +91,7 @@ impl PspDirectoryEntry {
             0x02 => "PSP Secure OS",
             0x03 => "PSP Recovery Boot Loader",
             0x04 => "PSP Non-volatile Data",
+            0x05 => "PSP RTM public key",
             0x06 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x08 => "SMU Firmware",
             0x09 => "AMD Secure Debug Key",
@@ -98,10 +100,14 @@ impl PspDirectoryEntry {
             0x0C => "PSP Trustlet",
             0x0D => "PSP Trustlet Public Key",
             0x10 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
-            0x12 => "SMU Firmware",
+            0x12 => "SMU Firmware 2",
             0x13 => "PSP Early Secure Unlock Debug",
             0x14 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x1A => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
+            0x1B => "Boot Driver",
+            0x1C => "SoC_Driver",
+            0x1D => "Debug Driver",
+            0x1F => "Interface Driver",
             0x20 => "IP Discovery",
             0x21 => "Wrapped iKEK",
             0x22 => "PSP Token Unlock",
@@ -160,10 +166,29 @@ impl PspDirectoryEntry {
             0x59 => "DMCU-ISR",
             0x5A => "MSMU Binary 0",
             0x5B => "MSMU Binary 1",
-            0x5F => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
+            0x5C => "SPI ROM Configuration",
+            0x5D => "MPIO",
+            0x5F => "PSP SMU SCS (Fam. 15h+16h), TPM lite (Fam. 17h+19h)",
+            0x71 => "DMCUB",
             0x73 => "PSP Boot Loader AB",
+            0x76 => "RIB",
             0x80 => "OEM Sys-TA",
             0x81 => "OEM Sys-TA Signing Key",
+            0x85 => "FW AMF SRAM",
+            0x86 => "FW AMF DRAM",
+            0x88 => "FW AMF WLAN",
+            0x89 => "FW AMF MFD",
+            0x8C => "FW MPDMA TF",
+            0x8D => "TA IKEK",
+            0x90 => "FW MPCCX",
+            0x91 => "FW GMI3 PHY",
+            0x92 => "FW MPDMA PM",
+            0x94 => "FW LSDMA",
+            0x95 => "FW C20 MP",
+            0x98 => "FW FCFG TABLE",
+            0x9A => "FW MINIMSMU",
+            0x9D => "FW SRAM FW EXT",
+            0xA2 => "FW UMSMU",
             _ => "Unknown",
         }
     }

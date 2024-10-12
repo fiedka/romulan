@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use alloc::string::String;
+use alloc::string::ToString;
 use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::AsBytes;
@@ -49,7 +50,7 @@ impl<'a> Rom<'a> {
                         .unwrap()
                         .0;
                 return Ok(Rom {
-                    data: &data,
+                    data,
                     efs: *lv,
                     // .map_err(|err| format!("EFS invalid: {:?}", err))?,
                 });
@@ -58,7 +59,7 @@ impl<'a> Rom<'a> {
             i += STEP_SIZE;
         }
 
-        Err(format!("Embedded Firmware Structure not found"))
+        Err("Embedded Firmware Structure not found".to_string())
     }
 
     pub fn data(&self) -> &'a [u8] {
@@ -70,10 +71,10 @@ impl<'a> Rom<'a> {
     }
 
     pub fn psp_legacy(&self) -> Result<directory::Directory, String> {
-        get_dir(self.efs.psp_legacy as usize, &self.data)
+        get_dir(self.efs.psp_legacy as usize, self.data)
     }
 
     pub fn psp_17_00(&self) -> Result<directory::Directory, String> {
-        get_dir(self.efs.psp_17_00 as usize, &self.data)
+        get_dir(self.efs.psp_17_00 as usize, self.data)
     }
 }

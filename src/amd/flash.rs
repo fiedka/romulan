@@ -32,6 +32,7 @@ pub struct EFS {
     /// 0x20: BIOS directory for family 17 models 30 to 3f and family 19 models 00 to 0f
     pub bios_17_30_3f_19_00_0f: u32,
     /// 0x24: bit 0 is set to 0 if this is a second generation structure
+    /// coreboot util/amdfwtool says: introduced after RAVEN/PICASSO
     pub second_gen: u32,
     /// 0x28: BIOS directory for family 17 model 60 and later
     pub bios_17_60: u32,
@@ -61,18 +62,21 @@ pub struct EFS {
 #[repr(C)]
 pub struct SpiMode(u8);
 
+// see coreboot util/amdfwtool/amdfwtool
 impl Display for SpiMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self.0 {
-            0 => "(0, yet unseen)".to_string(),
-            1 => "(1, yet unseen)".to_string(),
-            2 => "(2, yet unseen)".to_string(),
-            3 => "(3, yet unseen)".to_string(),
-            4 => "(4, yet unseen)".to_string(),
-            5 => "(5, seen frequently)".to_string(),
+            0 => "Normal (up to 33M)".to_string(),
+            1 => "Reserved (error?)".to_string(),
+            2 => "Dual IO (1-1-2)".to_string(),
+            3 => "Quad IO (1-1-4)".to_string(),
+            4 => "Dual IO (1-2-2)".to_string(),
+            5 => "Quad IO (1-4-4)".to_string(),
+            6 => "Normal (up to 66M)".to_string(),
+            7 => "Fast Read".to_string(),
             _ => format!("unknown ({:02x})", self.0),
         };
-        write!(f, "{s:20}")
+        write!(f, "{s:18}")
     }
 }
 
@@ -102,8 +106,8 @@ pub struct Micron(u8);
 impl Display for Micron {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self.0 {
-            0x0A => "Micron".to_string(),
-            0xFF => "no Micron".to_string(),
+            0x0A => "always".to_string(),
+            0xFF => "unused".to_string(),
             _ => format!("unknown ({:02x})", self.0),
         };
         write!(f, "{s}")
@@ -117,8 +121,9 @@ pub struct Micron2(u8);
 impl Display for Micron2 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self.0 {
-            0xAA => "Micron".to_string(),
+            0xAA => "always".to_string(),
             0x55 => "automatic".to_string(),
+            0xFF => "unused".to_string(),
             _ => format!("unknown ({:02x})", self.0),
         };
         write!(f, "{s}")

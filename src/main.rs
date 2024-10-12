@@ -403,7 +403,7 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let (psp1, data1) = p1;
     let (psp2, data2) = p2;
 
-    // FIXME: find a better interface
+    // FIXME: find a better interface; either may not be a combo directory
     let es1 = psp1.get_combo_entries().unwrap();
     let es2 = psp2.get_combo_entries().unwrap();
 
@@ -435,6 +435,11 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     for (i, e) in ei2 {
         let ex = es1[i];
         println!("> {i}: Combo dir {e} vs {ex}");
+        // TODO: handle error
+        match psp1.get_combo_header() {
+            Ok(h) => println!("{h}"),
+            Err(e) => println!("{e}"),
+        }
         println!();
 
         if verbose {

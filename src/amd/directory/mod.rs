@@ -43,7 +43,7 @@ impl<'a> Directory {
         }
     }
 
-    pub fn get_checksum(self: &Self) -> u32 {
+    pub fn get_checksum(&self) -> u32 {
         match self {
             Directory::Bios(d) => d.header.checksum,
             Directory::BiosCombo(d) => d.header.checksum,
@@ -54,7 +54,7 @@ impl<'a> Directory {
         }
     }
 
-    pub fn get_magic(self: &Self) -> u32 {
+    pub fn get_magic(&self) -> u32 {
         match self {
             Directory::Bios(d) => d.header.magic,
             Directory::BiosCombo(d) => d.header.magic,
@@ -65,7 +65,15 @@ impl<'a> Directory {
         }
     }
 
-    pub fn get_combo_entries(self: &Self) -> Result<&Vec<ComboDirectoryEntry>, String> {
+    pub fn get_combo_header(&self) -> Result<&ComboDirectoryHeader, String> {
+        match self {
+            Directory::BiosCombo(d) => Ok(&d.header),
+            Directory::PspCombo(d) => Ok(&d.header),
+            _ => Err("not a combo directory".to_string()),
+        }
+    }
+
+    pub fn get_combo_entries(&self) -> Result<&Vec<ComboDirectoryEntry>, String> {
         match self {
             Directory::BiosCombo(d) => Ok(&d.entries),
             Directory::PspCombo(d) => Ok(&d.entries),
@@ -73,14 +81,14 @@ impl<'a> Directory {
         }
     }
 
-    pub fn get_bios_entries(self: &Self) -> Result<&Vec<BiosDirectoryEntry>, String> {
+    pub fn get_bios_entries(&self) -> Result<&Vec<BiosDirectoryEntry>, String> {
         match self {
             Directory::Bios(d) => Ok(&d.entries),
             _ => Err("not a BIOS directory".to_string()),
         }
     }
 
-    pub fn get_psp_entries(self: &Self) -> Result<&Vec<PspDirectoryEntry>, String> {
+    pub fn get_psp_entries(&self) -> Result<&Vec<PspDirectoryEntry>, String> {
         match self {
             Directory::Psp(d) => Ok(&d.entries),
             _ => Err("not a PSP directory".to_string()),
@@ -109,13 +117,33 @@ pub struct ComboDirectoryHeader {
     pub checksum: u32,
     /// 0x08: number of entries
     pub entries: u32,
-    /// 0x0c: 0 for dynamic look up through all entries, 1 for PSP or chip ID match.
+    /// 0x0c: 0 for dynamic look up through all entries,
+    ///       1 for PSP or chip ID match.
     /// Only for PSP combo directory
+    /// coreboot util/amdfwtool says:
+    ///    0 - Compare PSP ID,
+    ///    1 - Compare chip family ID
     pub look_up_mode: u32,
     pub rsvd_10: u32,
     pub rsvd_14: u32,
     pub rsvd_18: u32,
     pub rsvd_1c: u32,
+}
+
+impl Display for ComboDirectoryHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "checksum {:08x}, {} entries, mode {}, {:08x}:{:08x}:{:08x}:{:08x}",
+            self.checksum,
+            self.entries,
+            self.look_up_mode,
+            self.rsvd_10,
+            self.rsvd_14,
+            self.rsvd_18,
+            self.rsvd_1c
+        )
+    }
 }
 
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Serialize, Deserialize)]
