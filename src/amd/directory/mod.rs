@@ -6,6 +6,9 @@ use core::str;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes};
 
+// TODO: generate test fixtures with https://github.com/amd/firmware_binaries
+// and coreboot util/amdfwtool (coreboot has a copy of the AMD binaries repo)
+
 pub use self::bios::*;
 pub use self::psp::*;
 
@@ -152,8 +155,10 @@ impl Display for PspOrFamId {
         let s = match self.0 {
             0x00000000 => "Carrizo".to_string(), // TODO: really?!
             0x10220B00 => "Stoneyridge".to_string(),
-            0xBC0A0000 => "Raven or Picasso".to_string(),
+            0xBC0A0000 => "Raven Ridge or Picasso".to_string(),
+            // Matisse somewhere here? Pinnacle Ridge? Castle Peak?
             0xbc0a0100 => "(bc0a0100; seen on A300 3.60K + X570)".to_string(),
+            // Dali? Matisse? ...
             0xbc090000 => "(bc090000; seen on A300 3.60S + X570)".to_string(),
             0xbc0b0500 => "(bc0b0500; seen on ASRock A520M-HVS + X370 Killer SLI)".to_string(),
             0xBC0C0000 => "Renoir or Lucienne".to_string(),
@@ -162,6 +167,7 @@ impl Display for PspOrFamId {
             0xBC0D0400 => "Phoenix".to_string(),
             0xBC0D0900 => "Mendocino".to_string(),
             0xBC0E0200 => "Glinda".to_string(),
+            // TODO: Vermeer, Rembrandt...?
             _ => format!("unknown ({:08x})", self.0),
         };
         write!(f, "{s}")
