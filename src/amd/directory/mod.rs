@@ -145,12 +145,36 @@ impl Display for ComboDirectoryHeader {
 
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Serialize, Deserialize)]
 #[repr(C)]
+pub struct PspOrFamId(u32);
+
+impl Display for PspOrFamId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self.0 {
+            0x00000000 => "Carrizo".to_string(), // TODO: really?!
+            0x10220B00 => "Stoneyridge".to_string(),
+            0xBC0A0000 => "Raven or Picasso".to_string(),
+            0xbc0a0100 => "(bc0a0100; seen on A300 3.60K + X570)".to_string(),
+            0xbc090000 => "(bc090000; seen on A300 3.60S + X570)".to_string(),
+            0xbc0b0500 => "(bc0b0500; seen on ASRock A520M-HVS + X370 Killer SLI)".to_string(),
+            0xBC0C0000 => "Renoir or Lucienne".to_string(),
+            0xBC0C0111 => "Genoa".to_string(),
+            0xBC0C0140 => "Cezanne".to_string(),
+            0xBC0D0400 => "Phoenix".to_string(),
+            0xBC0D0900 => "Mendocino".to_string(),
+            0xBC0E0200 => "Glinda".to_string(),
+            _ => format!("unknown ({:08x})", self.0),
+        };
+        write!(f, "{s}")
+    }
+}
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Serialize, Deserialize)]
+#[repr(C)]
 pub struct ComboDirectoryEntry {
-    /// 0x00: 0 to compare PSP ID, 1 to compare chip family ID
+    /// 0 to compare PSP ID, 1 to compare chip family ID
     pub id_select: u32,
-    /// 0x04: PSP or chip ID
-    pub id: u32,
-    /// 0x08: Address of directory
+    pub id: PspOrFamId,
+    /// Address of directory
     pub directory: u64,
 }
 
@@ -161,6 +185,6 @@ impl Display for ComboDirectoryEntry {
         } else {
             "Fam ID"
         };
-        write!(f, "{sel} {:08x} @ {:08x}", self.id, self.directory)
+        write!(f, "{sel} {} @ {:08x}", self.id, self.directory)
     }
 }
