@@ -1,6 +1,6 @@
 # AMD Firmware Image
 
-## Embedded Firmware Structure
+## Embedded Firmware Structure (EFS)
 
 This is the entry point to everything else, pointing to firmware for
 - IMC (...)
@@ -12,6 +12,9 @@ This is the entry point to everything else, pointing to firmware for
 
 It also contains a "second gen" flag plus SPI flash configuration per processor
 family/model range.
+
+Note that given a firmware image, you likely have firmware for multiple
+processors/variants in it.
 
 ## PSP Firmware
 
@@ -33,3 +36,9 @@ There is no other public source as of now.
 
 Multiple combo directory entries may refer to the same directory for different
 variants of a processor that can run the same PSP code.
+
+### How it works
+
+Which code is being run and how it is selected will need to be determined by
+the PSP mask ROM. In the case of immediate (non-combo) high level entries, it
+may just take what's there and fail or bail out on error; needs investigation.
