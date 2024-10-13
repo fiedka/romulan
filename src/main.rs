@@ -428,6 +428,22 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
                 diff_psp_dirs(&d1, &d2, data1, data2);
                 println!("< SUB DIR");
             }
+            if e1.kind == PspEntryType::PspLevel2ADir as u8
+                || e1.kind == PspEntryType::PspLevel2BDir as u8
+            {
+                println!();
+                let b1 = MAPPING_MASK & e1.value as usize;
+                let bd1 = PspBackupDir::new(&data1[b1..]).unwrap();
+                let a1 = bd1.addr as usize;
+                let d1 = PspDirectory::new(&data1[a1..]).unwrap();
+                let b2 = MAPPING_MASK & e2.value as usize;
+                let bd2 = PspBackupDir::new(&data2[b2..]).unwrap();
+                let a2 = bd2.addr as usize;
+                let d2 = PspDirectory::new(&data2[a2..]).unwrap();
+                println!("> SUB DIR");
+                diff_psp_dirs(&d1, &d2, data1, data2);
+                println!("< SUB DIR");
+            }
         }
         println!();
     }
