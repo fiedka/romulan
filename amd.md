@@ -1,5 +1,15 @@
 # AMD Firmware Image
 
+The knowledge here stems in part from the existing Romulan code, plus other
+sources, including:
+- [coreboot docs](https://doc.coreboot.org/soc/amd/psp_integration.html)
+- coreboot util/amdfwtool
+- [PSPReverse](https://github.com/PSPReverse)
+- [Fiano](https://github.com/linuxboot/fiano/)
+- [Wikipedia](https://en.wikipedia.org/wiki/Table_of_AMD_processors)
+- [Wikichip](https://en.wikichip.org/wiki/amd)
+- [Mimoja's tools](https://github.com/Mimoja/amdfw)
+
 ## Embedded Firmware Structure (EFS)
 
 This is the entry point to everything else, pointing to firmware for
