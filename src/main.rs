@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 
 use clap::Parser;
-use romulan::amd;
-use romulan::amd::directory::{Directory, PspDirectory, PspDirectoryEntry};
-use romulan::amd::flash::EFS;
-use romulan::intel;
-use romulan::intel::{section, volume};
+use romulan::amd::directory::{
+    Directory, PspBackupDir, PspDirectory, PspDirectoryEntry, PspEntryType,
+};
+use romulan::amd::{self, flash::EFS};
+use romulan::intel::{self, section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -291,18 +291,62 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
                 println!("no BIOS dir @ {dir:08x}");
             }
         }
+        match rom.psp_legacy() {
+            Ok(psp) => {
+                println!();
+                println!("# legacy PSP {psp}");
+                print_psp_dirs(&psp, data);
+            }
+            Err(e) => {
+                println!();
+                println!("# legacy PSP: {e}");
+            }
+        }
+        match rom.psp_17_00() {
+            Ok(psp) => {
+                println!();
+                println!("# Fam 17 PSP {psp}");
+                print_psp_dirs(&psp, data);
+            }
+            Err(e) => {
+                println!();
+                println!("# Fam 17 PSP: {e}");
+            }
+        }
     }
 }
 
 fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
     for e in dir {
         println!("- {e}");
-        if e.kind == 0x40 {
+        if e.kind == PspEntryType::PspLevel2Dir as u8 {
             let b = MAPPING_MASK & e.value as usize;
             let d = PspDirectory::new(&data[b..]).unwrap();
+            println!();
             println!("| {d}");
             print_psp_dir(&d.entries, data);
+            println!();
+        }
+        // Level A sample
+        // 00299000: 12d4 7558 ffff ffff 0200 0000 00ff ffff  ..uX............
+        // 00299010: 0010 0200 0009 0dbc ffff ffff ffff ffff  ................
+        //
+        // Level B sample
+        // 0029a000: 2784 0dd9 0100 0000 0200 0000 00ff ffff  '...............
+        // 0029a010: 00c0 1500 0009 0dbc ffff ffff ffff ffff  ................
+        //
+        // PSP Level 2 A dir, Level 2 B dir
+        if e.kind == PspEntryType::PspLevel2ADir as u8
+            || e.kind == PspEntryType::PspLevel2BDir as u8
+        {
+            let b = MAPPING_MASK & e.value as usize;
+            let bd = PspBackupDir::new(&data[b..]).unwrap();
+            let a = bd.addr as usize;
+            let d = PspDirectory::new(&data[a..]).unwrap();
+            println!();
             println!("| {d}");
+            print_psp_dir(&d.entries, data);
+            println!();
         }
     }
 }
@@ -318,8 +362,8 @@ fn diff_psp_entry(
     data1: &[u8],
     data2: &[u8],
 ) -> Result<Comparison, String> {
-    let d1 = e1.data(&data1).unwrap();
-    let d2 = e2.data(&data2).unwrap();
+    let d1 = e1.data(data1).unwrap();
+    let d2 = e2.data(data2).unwrap();
     if d1.eq(&d2) {
         Ok(Comparison::Same)
     } else {
@@ -339,29 +383,28 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
             .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
         {
             Some(e) => {
-                common.push((de.clone(), e.clone()));
+                common.push((*de, *e));
             }
             None => {
-                only_1.push(de.clone());
+                only_1.push(*de);
             }
         }
     }
 
     for de in dir2.entries.iter() {
-        if dir1
+        if !dir1
             .entries
             .iter()
-            .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
-            .is_none()
+            .any(|e| e.kind == de.kind && e.sub_program == de.sub_program)
         {
-            only_2.push(de.clone());
+            only_2.push(*de);
         }
     }
 
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
-            match diff_psp_entry(&e1, &e2, &data1, &data2) {
+            match diff_psp_entry(e1, e2, data1, data2) {
                 Ok(r) => match r {
                     Comparison::Same => println!("= {e1} vs {e2}"),
                     Comparison::Diff => println!("≠ {e1} vs {e2}"),
@@ -403,7 +446,23 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let (psp1, data1) = p1;
     let (psp2, data2) = p2;
 
-    // FIXME: find a better interface; either may not be a combo directory
+    if *psp1 != *psp2 {
+        println!("PSP 1 and 2 are of different kinds, won't diff");
+        print_psp_dirs(psp1, data1);
+        print_psp_dirs(psp2, data2);
+        return;
+    }
+
+    // FIXME: find a better interface?
+    match psp1 {
+        Directory::PspCombo(_) => {}
+        Directory::Psp(d) => {
+            println!("... {d} is not a combo dir, not diffing (yet)");
+            return;
+        }
+        _ => unreachable!(),
+    }
+
     let es1 = psp1.get_combo_entries().unwrap();
     let es2 = psp2.get_combo_entries().unwrap();
 
@@ -465,21 +524,19 @@ fn get_real_addr(addr: u32) -> Option<u32> {
 fn diff_addr(a1: Option<u32>, a2: Option<u32>) -> String {
     if a1.is_none() && a2.is_none() {
         "both empty".to_string()
+    } else if a1.is_none() {
+        let a = a2.unwrap();
+        format!("first is empty, other is {a:08x}")
+    } else if a2.is_none() {
+        let a = a1.unwrap();
+        format!("first is {a:08x}, other is empty")
     } else {
-        if a1.is_none() {
-            let a = a2.unwrap();
-            format!("first is empty, other is {a:08x}")
-        } else if a2.is_none() {
-            let a = a1.unwrap();
-            format!("first is {a:08x}, other is empty")
+        let a1 = a1.unwrap();
+        let a2 = a2.unwrap();
+        if a1 != a2 {
+            format!("first is {a1:08x}, other is {a2:08x}")
         } else {
-            let a1 = a1.unwrap();
-            let a2 = a2.unwrap();
-            if a1 != a2 {
-                format!("first is {a1:08x}, other is {a2:08x}")
-            } else {
-                format!("both equal {a1:08x}")
-            }
+            format!("both equal {a1:08x}")
         }
     }
 }
@@ -546,13 +603,21 @@ fn diff_efs(rom1: &amd::Rom, rom2: &amd::Rom) {
 }
 
 fn print_psp_dirs(psp: &Directory, data: &[u8]) {
-    let dirs = psp.get_combo_entries().unwrap();
-    for d in dirs {
-        let base = MAPPING_MASK & d.directory as usize;
-        println!("dir @ {base:08x}");
-        let dir = PspDirectory::new(&data[base..]).unwrap();
-        print_psp_dir(&dir.entries, data);
-        println!();
+    match psp {
+        Directory::PspCombo(d) => {
+            for d in &d.entries {
+                let base = MAPPING_MASK & d.directory as usize;
+                println!("dir @ {base:08x} {d}");
+                let dir = PspDirectory::new(&data[base..]).unwrap();
+                print_psp_dir(&dir.entries, data);
+                println!();
+            }
+        }
+        Directory::Psp(d) => {
+            println!("{d}");
+            print_psp_dir(&d.entries, data);
+        }
+        _ => println!("Should not happen: not a PSP directory!"),
     }
 }
 
@@ -567,7 +632,7 @@ fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 match psp1.get_psp_entries() {
                     Ok(dir) => {
                         println!("# legacy PSP 1:");
-                        print_psp_dir(&dir, rom1.data());
+                        print_psp_dir(dir, rom1.data());
                     }
                     Err(e) => println!("# legacy PSP 1: {e}"),
                 }

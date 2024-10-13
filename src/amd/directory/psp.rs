@@ -1,4 +1,5 @@
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::string::{String, ToString};
+use alloc::{boxed::Box, vec::Vec};
 use core::fmt::{self, Display};
 use core::mem;
 use serde::{Deserialize, Serialize};
@@ -35,23 +36,47 @@ pub enum AddrMode {
 // FIXME: mask per SoC generation
 const MAPPING_MASK: usize = 0x00ff_ffff;
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(u8)]
+pub enum PspEntryType {
+    SoftFuseChain = 0x0b,
+    PspLevel2Dir = 0x40,
+    PspLevel2ADir = 0x48,
+    PspLevel2BDir = 0x4a,
+}
+
 impl Display for PspDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{:02x}.{} ({}) @ 0x{:08x}",
-            self.kind,
-            self.sub_program,
-            self.description(),
-            self.value
-        )
+        // soft fuse
+        if self.kind == PspEntryType::SoftFuseChain as u8 {
+            // There may be semantics behind this. It is often 1 or 0.
+            // coreboot refers to non-public NDA docs for explanation.
+            // https://doc.coreboot.org/soc/amd/psp_integration.html
+            write!(
+                f,
+                "{:02x}.{} ({}): 0x{:08x}",
+                self.kind,
+                self.sub_program,
+                self.description(),
+                self.value
+            )
+        } else {
+            write!(
+                f,
+                "{:02x}.{} ({}) @ 0x{:08x}",
+                self.kind,
+                self.sub_program,
+                self.description(),
+                self.value
+            )
+        }
     }
 }
 
 impl PspDirectoryEntry {
     pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
         let value = (self.value as usize) & ADDR_MASK;
-        if self.size == 0xFFFFFFFF {
+        if self.size == 0xFFFF_FFFF {
             return Ok(value.to_le_bytes().to_vec().into_boxed_slice());
         }
 
@@ -194,6 +219,27 @@ impl PspDirectoryEntry {
     }
 }
 
+// TODO: What are the other fields? coreboot util/amdfwtool...?
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct PspBackupDir {
+    pub _00: u32,
+    pub _04: u32,
+    pub _08: u32,
+    pub _0c: u32,
+    pub addr: u32,
+    pub _14: u32,
+}
+
+impl<'a> PspBackupDir {
+    pub fn new(data: &'a [u8]) -> Result<Self, String> {
+        match Self::read_from_prefix(data) {
+            Some(s) => Ok(s),
+            None => Err("could not parse PSP backup directory".to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PspDirectory {
     pub header: DirectoryHeader,
@@ -204,8 +250,8 @@ impl Display for PspDirectory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{:08x} ({:08x}) {} entries",
-            self.header.magic, self.header.checksum, self.header.entries
+            "PSP directory checksum {:08x}, {} entries",
+            self.header.checksum, self.header.entries
         )
     }
 }

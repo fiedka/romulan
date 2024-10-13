@@ -25,6 +25,13 @@ pub enum Directory {
     PspCombo(PspComboDirectory),
 }
 
+use core::mem::discriminant as tag;
+impl PartialEq<Self> for Directory {
+    fn eq(&self, rhs: &Self) -> bool {
+        tag(self) == tag(rhs)
+    }
+}
+
 impl Display for Directory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let b = self.get_magic().to_le_bytes();
