@@ -2,7 +2,8 @@
 
 use clap::Parser;
 use romulan::amd::directory::{
-    Directory, PspBackupDir, PspDirectory, PspDirectoryEntry, PspEntryType,
+    ComboDirectoryEntry, Directory, PspBackupDir, PspComboDirectory, PspDirectory,
+    PspDirectoryEntry, PspEntryType,
 };
 use romulan::amd::{self, flash::EFS};
 use romulan::intel::{self, section, volume};
@@ -426,13 +427,13 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
     }
 
     if !only_1.is_empty() {
-        println!("only in 1:");
+        println!("entries only in 1:");
         print_psp_dir(&only_1, data1);
         println!();
     }
 
     if !only_2.is_empty() {
-        println!("only in 2:");
+        println!("entries only in 2:");
         print_psp_dir(&only_2, data2);
         println!();
     }
@@ -469,46 +470,88 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let l1 = es1.len();
     let l2 = es2.len();
 
-    if l1 != l2 {
-        println!("Not comparing {psp1} vs {psp2}: different number of entries: {l1} vs {l2}");
-        println!();
-        println!("1:");
-        print_psp_dirs(psp1, data1);
-        println!("2:");
-        print_psp_dirs(psp2, data2);
-        return;
-    }
-
     let c1 = psp1.get_checksum();
     let c2 = psp2.get_checksum();
+
     let cs = if c1 != c2 {
         format!("differ: {c1:04x} {c2:04x}")
     } else {
         "equal".to_string()
     };
-    println!("Comparing {psp1} vs {psp2}, {l1} entries each, checksums {cs}");
-    println!();
 
-    let ei2 = es2.iter().enumerate();
+    if l1 != l2 {
+        println!("{psp1} vs {psp2}: different number of entries: {l1} vs {l2}");
+        println!();
+    } else {
+        println!("Comparing {psp1} vs {psp2}, {l1} entries each, checksums {cs}");
+        println!();
+    }
 
-    for (i, e) in ei2 {
-        let ex = es1[i];
-        println!("> {i}: Combo dir {e} vs {ex}");
-        // TODO: handle error
+    if false {
         match psp1.get_combo_header() {
             Ok(h) => println!("{h}"),
             Err(e) => println!("{e}"),
         }
         println!();
+        match psp2.get_combo_header() {
+            Ok(h) => println!("{h}"),
+            Err(e) => println!("{e}"),
+        }
+        println!();
+    }
 
+    let mut common = Vec::<(ComboDirectoryEntry, ComboDirectoryEntry)>::new();
+    let mut only_1 = Vec::<ComboDirectoryEntry>::new();
+    let mut only_2 = Vec::<ComboDirectoryEntry>::new();
+
+    for de in es1.iter() {
+        match es2
+            .iter()
+            .find(|e| e.id_select == de.id_select && e.id == de.id)
+        {
+            Some(e) => common.push((*de, *e)),
+            None => only_1.push(*de),
+        }
+    }
+    for de in es2.iter() {
+        if !es1
+            .iter()
+            .any(|e| e.id_select == de.id_select && e.id == de.id)
+        {
+            only_2.push(*de);
+        }
+    }
+
+    for (e1, e2) in common {
+        println!("> Combo dir {e1} vs {e2}");
+        // TODO: handle error
         if verbose {
-            let b1 = MAPPING_MASK & ex.directory as usize;
+            let b1 = MAPPING_MASK & e1.directory as usize;
             let d1 = PspDirectory::new(&data1[b1..]).unwrap();
 
-            let b2 = MAPPING_MASK & e.directory as usize;
+            let b2 = MAPPING_MASK & e2.directory as usize;
             let d2 = PspDirectory::new(&data2[b2..]).unwrap();
 
             diff_psp_dirs(&d1, &d2, data1, data2);
+        }
+    }
+
+    if !only_1.is_empty() {
+        println!("> Combo dir entries only in 1:");
+        for e in only_1 {
+            println!("> Combo dir {e}");
+            let b = MAPPING_MASK & e.directory as usize;
+            let d = PspDirectory::new(&data1[b..]).unwrap();
+            print_psp_dir(&d.entries, data1);
+        }
+    }
+    if !only_2.is_empty() {
+        println!("> Combo dir entries only in 2:");
+        for e in only_2 {
+            println!("> Combo dir {e}");
+            let b = MAPPING_MASK & e.directory as usize;
+            let d = PspDirectory::new(&data2[b..]).unwrap();
+            print_psp_dir(&d.entries, data1);
         }
     }
 }
@@ -602,16 +645,20 @@ fn diff_efs(rom1: &amd::Rom, rom2: &amd::Rom) {
     println!("LP Promontory firmware                        {diff}");
 }
 
+fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
+    for d in &dir.entries {
+        let base = MAPPING_MASK & d.directory as usize;
+        println!("dir @ {base:08x} {d}");
+        let dir = PspDirectory::new(&data[base..]).unwrap();
+        print_psp_dir(&dir.entries, data);
+        println!();
+    }
+}
+
 fn print_psp_dirs(psp: &Directory, data: &[u8]) {
     match psp {
         Directory::PspCombo(d) => {
-            for d in &d.entries {
-                let base = MAPPING_MASK & d.directory as usize;
-                println!("dir @ {base:08x} {d}");
-                let dir = PspDirectory::new(&data[base..]).unwrap();
-                print_psp_dir(&dir.entries, data);
-                println!();
-            }
+            print_psp_combo_dir(d, data);
         }
         Directory::Psp(d) => {
             println!("{d}");

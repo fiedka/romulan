@@ -157,6 +157,12 @@ impl Display for ComboDirectoryHeader {
 #[repr(C)]
 pub struct PspOrFamId(u32);
 
+impl PartialEq for PspOrFamId {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.0 == rhs.0
+    }
+}
+
 impl Display for PspOrFamId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self.0 {
@@ -193,10 +199,11 @@ pub struct ComboDirectoryEntry {
 
 impl Display for ComboDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let sel = if self.id_select == 0 {
-            "PSP ID"
-        } else {
-            "Fam ID"
+        let sel = match self.id_select {
+            0 => "PSP ID",
+            1 => "Fam ID",
+            // this should not occur
+            _ => "(ID meaning unknown)",
         };
         write!(f, "{sel} {} @ {:08x}", self.id, self.directory)
     }
