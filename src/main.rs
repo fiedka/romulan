@@ -322,10 +322,16 @@ fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
         println!("- {e}");
         if e.kind == PspEntryType::PspLevel2Dir as u8 {
             let b = MAPPING_MASK & e.value as usize;
-            let d = PspDirectory::new(&data[b..]).unwrap();
             println!();
-            println!("| {d}");
-            print_psp_dir(&d.entries, data);
+            match PspDirectory::new(&data[b..]) {
+                Ok(d) => {
+                    println!("| {d}");
+                    print_psp_dir(&d.entries, data);
+                }
+                Err(e) => {
+                    println!("Cannot parse level 2 directory @ {b:08x}: {e}");
+                }
+            }
             println!();
         }
         // Level A sample
@@ -457,10 +463,14 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     // FIXME: find a better interface?
     match psp1 {
         Directory::PspCombo(_) => {}
-        Directory::Psp(d) => {
-            println!("... {d} is not a combo dir, not diffing (yet)");
-            return;
-        }
+        Directory::Psp(d1) => match psp2 {
+            Directory::Psp(d2) => {
+                diff_psp_dirs(d1, d2, data1, data2);
+                return;
+            }
+            // NOTE: We checked above that psp1 and psp2 are of the same kind.
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
 
