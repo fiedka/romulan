@@ -58,6 +58,62 @@ pub struct EFS {
     pub _4a: u8,
 }
 
+pub fn get_real_addr(addr: u32) -> Option<u32> {
+    if addr == 0x0000_0000 || addr == 0xffff_ffff {
+        None
+    } else {
+        Some(addr)
+    }
+}
+
+impl Display for EFS {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let efs = self;
+        let is_gen2 = efs.second_gen & 0x1 == 0;
+        let gen = format!(":: Second gen? {is_gen2}");
+
+        let a = get_real_addr(efs.imc_fw);
+        let imc = format!(" IMC Firmware                                  {a:08x?}");
+        let a = get_real_addr(efs.gbe_fw);
+        let gbe = format!(" Gigabit ethernet firmware                     {a:08x?}");
+        let a = get_real_addr(efs.xhci_fw);
+        let xhci = format!(" XHCI firmware                                 {a:08x?}");
+
+        let a = get_real_addr(efs.bios_17_00_0f);
+        let b1 = format!(" Fam 17 Model 00-0f BIOS                       {a:08x?}");
+        let a = get_real_addr(efs.bios_17_10_1f);
+        let b2 = format!(" Fam 17 Model 00-0f BIOS                       {a:08x?}");
+        let a = get_real_addr(efs.bios_17_30_3f_19_00_0f);
+        let b3 = format!(" Fam 17 Model 30-0f + Fam 19 Model 00-0f BIOS  {a:08x?}");
+        let a = get_real_addr(efs.bios_17_60);
+        let b4 = format!(" Fam 17 Model 60+ BIOS                         {a:08x?}");
+        let bios = format!("{b1}\n{b2}\n{b3}\n{b4}");
+
+        let a = get_real_addr(efs.psp_legacy);
+        let psp1 = format!(" PSP legacy                                    {a:08x?}");
+        let a = get_real_addr(efs.psp_17_00);
+        let psp2 = format!(" PSP modern                                    {a:08x?}");
+        let psp = format!("{psp1}\n{psp2}");
+
+        let a = get_real_addr(efs.promontory);
+        let p1 = format!(" Promontory firmware                           {a:08x?}");
+        let a = get_real_addr(efs.lp_promontory);
+        let p2 = format!(" LP Promontory firmware                        {a:08x?}");
+        let promontory = format!("{p1}\n{p2}");
+
+        let spi1 = format!(" SPI Fam 15 Models 60-6f         {}", efs.spi_cfg_15_60_6f);
+        let spi2 = format!(" SPI Fam 17 Models 00-1f         {}", efs.spi_cfg_17_00_1f);
+        let spi3 = format!(" SPI Fam 17 Models 30 and later  {}", efs.spi_cfg_17_30);
+        let spi = format!("{spi1}\n{spi2}\n{spi3}");
+
+        let fw = format!("{imc}\n{gbe}\n{xhci}\n{psp}\n{bios}\n{promontory}");
+        write!(
+            f,
+            ": EFS :\n{gen}\n:: Firmware ::\n{fw}\n:: SPI flash configuration ::\n{spi}\n"
+        )
+    }
+}
+
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct SpiMode(u8);
