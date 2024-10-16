@@ -69,48 +69,42 @@ pub fn get_real_addr(addr: u32) -> Option<u32> {
 impl Display for EFS {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let efs = self;
+        writeln!(f, ": EFS :")?;
+
         let is_gen2 = efs.second_gen & 0x1 == 0;
-        let gen = format!(":: Second gen? {is_gen2}");
+        writeln!(f, ":: Second gen? {is_gen2}")?;
 
+        writeln!(f, ":: Firmware ::")?;
         let a = get_real_addr(efs.imc_fw);
-        let imc = format!(" IMC Firmware                                  {a:08x?}");
+        writeln!(f, " IMC Firmware                                  {a:08x?}")?;
         let a = get_real_addr(efs.gbe_fw);
-        let gbe = format!(" Gigabit ethernet firmware                     {a:08x?}");
+        writeln!(f, " Gigabit ethernet firmware                     {a:08x?}")?;
         let a = get_real_addr(efs.xhci_fw);
-        let xhci = format!(" XHCI firmware                                 {a:08x?}");
-
+        writeln!(f, " XHCI firmware                                 {a:08x?}")?;
         let a = get_real_addr(efs.bios_17_00_0f);
-        let b1 = format!(" Fam 17 Model 00-0f BIOS                       {a:08x?}");
+        writeln!(f, " Fam 17 Model 00-0f BIOS                       {a:08x?}")?;
         let a = get_real_addr(efs.bios_17_10_1f);
-        let b2 = format!(" Fam 17 Model 00-0f BIOS                       {a:08x?}");
+        writeln!(f, " Fam 17 Model 00-0f BIOS                       {a:08x?}")?;
         let a = get_real_addr(efs.bios_17_30_3f_19_00_0f);
-        let b3 = format!(" Fam 17 Model 30-0f + Fam 19 Model 00-0f BIOS  {a:08x?}");
+        writeln!(f, " Fam 17 Model 30-0f + Fam 19 Model 00-0f BIOS  {a:08x?}")?;
         let a = get_real_addr(efs.bios_17_60);
-        let b4 = format!(" Fam 17 Model 60+ BIOS                         {a:08x?}");
-        let bios = format!("{b1}\n{b2}\n{b3}\n{b4}");
-
+        writeln!(f, " Fam 17 Model 60+ BIOS                         {a:08x?}")?;
         let a = get_real_addr(efs.psp_legacy);
-        let psp1 = format!(" PSP legacy                                    {a:08x?}");
+        writeln!(f, " PSP legacy (before Fam 17)                    {a:08x?}")?;
         let a = get_real_addr(efs.psp_17_00);
-        let psp2 = format!(" PSP modern                                    {a:08x?}");
-        let psp = format!("{psp1}\n{psp2}");
-
+        writeln!(f, " PSP modern (Fam 17 and later)                 {a:08x?}")?;
         let a = get_real_addr(efs.promontory);
-        let p1 = format!(" Promontory firmware                           {a:08x?}");
+        writeln!(f, " Promontory firmware                           {a:08x?}")?;
         let a = get_real_addr(efs.lp_promontory);
-        let p2 = format!(" LP Promontory firmware                        {a:08x?}");
-        let promontory = format!("{p1}\n{p2}");
+        writeln!(f, " LP Promontory firmware                        {a:08x?}")?;
 
-        let spi1 = format!(" SPI Fam 15 Models 60-6f         {}", efs.spi_cfg_15_60_6f);
-        let spi2 = format!(" SPI Fam 17 Models 00-1f         {}", efs.spi_cfg_17_00_1f);
-        let spi3 = format!(" SPI Fam 17 Models 30 and later  {}", efs.spi_cfg_17_30);
-        let spi = format!("{spi1}\n{spi2}\n{spi3}");
-
-        let fw = format!("{imc}\n{gbe}\n{xhci}\n{psp}\n{bios}\n{promontory}");
-        write!(
-            f,
-            ": EFS :\n{gen}\n:: Firmware ::\n{fw}\n:: SPI flash configuration ::\n{spi}\n"
-        )
+        writeln!(f, ":: SPI flash configuration ::")?;
+        let s1 = efs.spi_cfg_15_60_6f;
+        let s2 = efs.spi_cfg_17_00_1f;
+        let s3 = efs.spi_cfg_17_30;
+        writeln!(f, " Fam 15 Models 60-6f         {s1}")?;
+        writeln!(f, " Fam 17 Models 00-1f         {s2}")?;
+        writeln!(f, " Fam 17 Models 30 and later  {s3}")
     }
 }
 
