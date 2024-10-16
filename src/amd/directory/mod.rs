@@ -166,20 +166,22 @@ impl PartialEq for PspOrFamId {
 impl Display for PspOrFamId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self.0 {
-            0x00000000 => "Carrizo".to_string(), // TODO: really?!
-            0x10220B00 => "Stoneyridge".to_string(),
-            0xBC0A0000 => "Raven Ridge or Picasso".to_string(),
+            0x0000_0000 => "Carrizo".to_string(), // TODO: really?!
+            0x1022_0B00 => "Stoneyridge".to_string(),
+            0xbc09_0000 => "(maybe Summit Ridge; seen on A300 3.60S + X570)".to_string(),
+            0xBC0A_0000 => "Raven Ridge or Picasso".to_string(),
             // Matisse somewhere here? Pinnacle Ridge? Castle Peak?
-            0xbc0a0100 => "(bc0a0100; seen on A300 3.60K + X570)".to_string(),
+            0xbc0a_0100 => {
+                "(maybe Pinnacle Ridge or Matisse/2; seen on A300 3.60K + X570)".to_string()
+            }
             // Dali? Matisse? ...
-            0xbc090000 => "(bc090000; seen on A300 3.60S + X570)".to_string(),
-            0xbc0b0500 => "(bc0b0500; seen on ASRock A520M-HVS + X370 Killer SLI)".to_string(),
-            0xBC0C0000 => "Renoir or Lucienne".to_string(),
-            0xBC0C0111 => "Genoa".to_string(),
-            0xBC0C0140 => "Cezanne".to_string(),
-            0xBC0D0400 => "Phoenix".to_string(),
-            0xBC0D0900 => "Mendocino".to_string(),
-            0xBC0E0200 => "Glinda".to_string(),
+            0xbc0b_0500 => "(maybe Vermeer; seen on ASRock A520M + X370)".to_string(),
+            0xBC0C_0000 => "Renoir or Lucienne".to_string(),
+            0xBC0C_0111 => "Genoa".to_string(),
+            0xBC0C_0140 => "Cezanne".to_string(),
+            0xBC0D_0400 => "Phoenix".to_string(),
+            0xBC0D_0900 => "Mendocino".to_string(),
+            0xBC0E_0200 => "Glinda".to_string(),
             // TODO: Vermeer, Rembrandt...?
             _ => format!("unknown ({:08x})", self.0),
         };
