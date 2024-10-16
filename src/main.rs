@@ -158,11 +158,17 @@ fn dump_volume(volume: &BiosVolume, padding: &str) {
 }
 
 fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
-    if let Ok(_) = rom.high_assurance_platform() {
-        println!("  HAP: set");
-    } else {
-        println!("  HAP: not set");
-    }
+    let hap = match rom.high_assurance_platform() {
+        Ok(r) => {
+            if r {
+                "set".to_string()
+            } else {
+                "not set".to_string()
+            }
+        }
+        Err(e) => format!("unknown: {e}"),
+    };
+    println!("  HAP: {hap}");
 
     if let Ok(bios) = rom.bios() {
         let len = bios.data().len() / K;
@@ -181,6 +187,13 @@ fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
         println!("  ME: {len} K");
         let v = me.version().unwrap_or("Unknown".to_string());
         println!("    Version: {v}");
+        let d = me.data();
+        match me_fs_rs::parse(d) {
+            Ok(fpt) => {
+                println!("{:#08?}", fpt.header);
+            }
+            Err(e) => println!("ME parser: {e}"),
+        }
     } else {
         println!("  ME: None");
     }

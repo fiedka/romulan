@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use core::{fmt, mem};
 
 #[derive(Copy, Clone, Debug)]
@@ -86,7 +86,7 @@ impl<'a> Rom<'a> {
         let offset = (((self.descriptor.map1 >> 16) & 0xff) << 4) as usize;
 
         if offset >= self.data.len() {
-            return Err(format!("PCHSTRAP table truncated"));
+            return Err("PCHSTRAP table truncated".to_string());
         }
 
         plain::from_bytes(&self.data[offset..])
