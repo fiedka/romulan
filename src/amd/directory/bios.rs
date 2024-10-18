@@ -43,7 +43,7 @@ impl Display for BiosDirectoryEntry {
         let fl = self.flags;
         write!(
             f,
-            "{kind:02x}.{sub:02x}.{rk:02x} {desc:50} {fl:08b} {size:08x} @ 0x{src:08x}{dest}"
+            "{kind:02x}.{sub:02x}.{rk:02x} {desc:40} {fl:08b} {size:08x} @ 0x{src:08x}{dest}"
         )
     }
 }
@@ -66,6 +66,8 @@ impl BiosDirectoryEntry {
         (self.flags >> 4) & 0xF
     }
 
+    // PMU: platform measurement unit or platform management unit?
+    // https://docs.amd.com/r/en-US/ug1085-zynq-ultrascale-trm/Low-Power-Operation-Mode
     pub fn description(&self) -> &'static str {
         match self.kind {
             0x05 => "BIOS Signing Key",
@@ -94,7 +96,7 @@ impl BiosDirectoryEntry {
             0x67 => "Machine Check Exception Data",
             0x68 => "AGESA PSP Customization Block Backup",
             0x6A => "MP2 Firmware",
-            0x6D => "Maybe NVAR (seen in ASRock A520M-HVS/A52MIX_2.73)",
+            0x6D => "Maybe NVAR (seen in ASRock A520M-HVS)",
             0x70 => "BIOS Level 2 Directory",
             _ => "Unknown",
         }

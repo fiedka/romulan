@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use clap::Parser;
-use romulan::amd::{self};
+use romulan::amd;
 use romulan::intel::{self, section, volume};
 use romulan::intel::{BiosFile, BiosSection, BiosSections, BiosVolume, BiosVolumes};
 use std::io::{Read, Write};
@@ -10,7 +10,7 @@ use std::{fs, io, mem, thread};
 use uefi::guid::SECTION_LZMA_COMPRESS_GUID;
 
 pub mod diff_amd;
-use diff_amd::{diff_bios, diff_efs, diff_psp, print_bios_dir, print_psp_dirs};
+use diff_amd::{diff_bios, diff_efs, diff_psp, print_bios_dir, print_psp_dirs, BIOS_DIR_NAMES};
 
 const K: usize = 1024;
 
@@ -197,13 +197,6 @@ fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
         println!("  ME: None");
     }
 }
-
-const BIOS_DIR_NAMES: [&str; 4] = [
-    "BIOS directory for family 17 models 00 to 0f",
-    "BIOS directory for family 17 models 10 to 1f",
-    "BIOS directory for family 17 models 30 to 3f and family 19 models 00 to 0f",
-    "BIOS directory for family 17 model 60 and later",
-];
 
 fn print_amd(rom: &amd::Rom, print_json: bool) {
     if print_json {
