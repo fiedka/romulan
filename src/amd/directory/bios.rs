@@ -48,9 +48,13 @@ impl Display for BiosDirectoryEntry {
     }
 }
 
+// TODO: this was the original value - but it errors for some entries...
+// const BIOS_ENTRY_MASK: usize = 0x01FF_FFFF;
+const BIOS_ENTRY_MASK: usize = 0x00FF_FFFF;
+
 impl BiosDirectoryEntry {
     pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
-        let start = (self.source & 0x1FFFFFF) as usize;
+        let start = BIOS_ENTRY_MASK & self.source as usize;
         let end = start + self.size as usize;
         if end <= data.len() {
             Ok(data[start..end].to_vec().into_boxed_slice())
