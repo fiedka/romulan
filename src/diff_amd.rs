@@ -421,10 +421,11 @@ pub fn diff_bios_simple_dir_entries(
     let es1 = &dir1.entries;
     let es2 = &dir2.entries;
 
+    // TODO: is kind + sub program + flags correct for uniqueness?
     for de in es1.iter() {
         match es2
             .iter()
-            .find(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+            .find(|e| e.kind == de.kind && e.sub_program == de.sub_program && e.flags == de.flags)
         {
             Some(e) => common.push((*de, *e)),
             None => only_1.push(*de),
@@ -433,7 +434,7 @@ pub fn diff_bios_simple_dir_entries(
     for de in es2.iter() {
         if !es1
             .iter()
-            .any(|e| e.kind == de.kind && e.sub_program == de.sub_program)
+            .any(|e| e.kind == de.kind && e.sub_program == de.sub_program && e.flags == de.flags)
         {
             only_2.push(*de);
         }
