@@ -494,12 +494,17 @@ pub fn diff_bios_simple_dirs(dir1: &Directory, dir2: &Directory, data1: &[u8], d
     }
 }
 
-// TODO: align with PSP dirs diffing
-pub fn diff_bios_dirs(b1: usize, b2: usize, data1: &[u8], data2: &[u8]) {
-    match Directory::new(&data1[b1..]) {
-        Ok(bios_dir1) => match Directory::new(&data2[b2..]) {
+// TODO: align with diff_psp_dirs
+fn diff_bioses(
+    b1: &Result<Directory, String>,
+    b2: &Result<Directory, String>,
+    data1: &[u8],
+    data2: &[u8],
+) {
+    match b1 {
+        Ok(bios_dir1) => match b2 {
             Ok(bios_dir2) => {
-                diff_bios_simple_dirs(&bios_dir1, &bios_dir2, data1, data2);
+                diff_bios_simple_dirs(bios_dir1, bios_dir2, data1, data2);
             }
             Err(e) => {
                 // TODO: print other dir
@@ -509,7 +514,7 @@ pub fn diff_bios_dirs(b1: usize, b2: usize, data1: &[u8], data2: &[u8]) {
         // TODO: print other dir if possible
         Err(e) => {
             println!("BIOS dir 1: {e}");
-            match Directory::new(&data2[b2..]) {
+            match b2 {
                 Ok(bios_dir2) => {
                     // TODO: print dir
                 }
@@ -523,34 +528,32 @@ pub fn diff_bios_dirs(b1: usize, b2: usize, data1: &[u8], data2: &[u8]) {
 
 pub fn diff_bios(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     println!("TODO: not yet complete");
-    let efs1 = rom1.efs();
-    let efs2 = rom2.efs();
     let data1 = rom1.data();
     let data2 = rom2.data();
 
-    let b1 = MAPPING_MASK & efs1.bios_17_00_0f as usize;
-    let b2 = MAPPING_MASK & efs2.bios_17_00_0f as usize;
+    let b1 = rom1.bios_17_00_0f();
+    let b2 = rom2.bios_17_00_0f();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[0]);
-    diff_bios_dirs(b1, b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2);
 
-    let b1 = MAPPING_MASK & efs1.bios_17_10_1f as usize;
-    let b2 = MAPPING_MASK & efs2.bios_17_10_1f as usize;
+    let b1 = rom1.bios_17_10_1f();
+    let b2 = rom2.bios_17_10_1f();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[1]);
-    diff_bios_dirs(b1, b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2);
 
-    let b1 = MAPPING_MASK & efs1.bios_17_30_3f_19_00_0f as usize;
-    let b2 = MAPPING_MASK & efs2.bios_17_30_3f_19_00_0f as usize;
+    let b1 = rom1.bios_17_30_3f_19_00_0f();
+    let b2 = rom2.bios_17_30_3f_19_00_0f();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[2]);
-    diff_bios_dirs(b1, b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2);
 
-    let b1 = MAPPING_MASK & efs1.bios_17_60 as usize;
-    let b2 = MAPPING_MASK & efs2.bios_17_60 as usize;
+    let b1 = rom1.bios_17_60();
+    let b2 = rom2.bios_17_60();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[3]);
-    diff_bios_dirs(b1, b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2);
 }
 
 fn diff_addr(a1: Option<u32>, a2: Option<u32>) -> String {

@@ -77,4 +77,20 @@ impl<'a> Rom<'a> {
     pub fn psp_17_00(&self) -> Result<directory::Directory, String> {
         get_dir(self.efs.psp_17_00 as usize, self.data)
     }
+
+    pub fn bios_17_00_0f(&self) -> Result<directory::Directory, String> {
+        get_dir(self.efs.bios_17_00_0f as usize, self.data)
+    }
+
+    pub fn bios_17_10_1f(&self) -> Result<directory::Directory, String> {
+        get_dir(self.efs.bios_17_10_1f as usize, self.data)
+    }
+
+    pub fn bios_17_30_3f_19_00_0f(&self) -> Result<directory::Directory, String> {
+        get_dir(self.efs.bios_17_30_3f_19_00_0f as usize, self.data)
+    }
+
+    pub fn bios_17_60(&self) -> Result<directory::Directory, String> {
+        get_dir(self.efs.bios_17_60 as usize, self.data)
+    }
 }
