@@ -1,7 +1,7 @@
 use romulan::amd;
 use romulan::amd::directory::{
-    BiosDirectory, BiosDirectoryEntry, ComboDirectoryEntry, Directory, PspBackupDir,
-    PspComboDirectory, PspDirectory, PspDirectoryEntry, PspEntryType,
+    BiosComboDirectory, BiosDirectory, BiosDirectoryEntry, ComboDirectoryEntry, Directory,
+    PspBackupDir, PspComboDirectory, PspDirectory, PspDirectoryEntry, PspEntryType,
 };
 use romulan::amd::flash::{get_real_addr, EFS};
 
@@ -86,32 +86,53 @@ pub fn print_psp_dirs(psp: &Directory, data: &[u8]) {
     }
 }
 
-pub fn print_bios_dir(base: usize, data: &[u8]) {
+pub fn print_bios_simple_dir(dir: &BiosDirectory, data: &[u8]) {
+    for entry in dir.entries() {
+        println!("{entry}");
+        if entry.kind == 0x70 {
+            print_bios_dir_from_addr(entry.source as usize, data);
+        }
+    }
+}
+
+fn print_bios_combo_dir(dir: &BiosComboDirectory, data: &[u8]) {
+    for entry in dir.entries() {
+        print_bios_dir_from_addr(entry.directory as usize, data);
+    }
+}
+
+fn print_bios_level2_dir(dir: &BiosDirectory) {
+    for entry in dir.entries() {
+        println!("{entry}");
+    }
+}
+
+fn print_bios_dir(dir: &Directory, data: &[u8]) {
+    match dir {
+        Directory::Bios(d) => print_bios_simple_dir(d, data),
+        Directory::BiosCombo(d) => print_bios_combo_dir(d, data),
+        Directory::BiosLevel2(d) => print_bios_level2_dir(d),
+        _ => println!("??"),
+    }
+}
+
+pub fn print_bios_dir_from_addr(base: usize, data: &[u8]) {
     let b = MAPPING_MASK & base;
     match Directory::new(&data[b..]) {
-        Ok(Directory::Bios(directory)) => {
+        Ok(Directory::Bios(d)) => {
             println!();
             println!("{b:08x}: BIOS Directory");
-            for entry in directory.entries() {
-                println!("{entry}");
-                if entry.kind == 0x70 {
-                    print_bios_dir(entry.source as usize, data);
-                }
-            }
+            print_bios_simple_dir(&d, data);
         }
-        Ok(Directory::BiosCombo(combo)) => {
+        Ok(Directory::BiosCombo(d)) => {
             println!();
             println!("{b:08x}: BIOS Combo Directory");
-            for entry in combo.entries() {
-                print_bios_dir(entry.directory as usize, data);
-            }
+            print_bios_combo_dir(&d, data);
         }
-        Ok(Directory::BiosLevel2(directory)) => {
+        Ok(Directory::BiosLevel2(d)) => {
             println!();
             println!("{b:08x}: BIOS Level 2 Directory");
-            for entry in directory.entries() {
-                println!("{entry}");
-            }
+            print_bios_level2_dir(&d);
         }
         Err(e) => println!("{e}"),
         _ => println!("??"),
@@ -124,7 +145,12 @@ fn diff_psp_entry(
     e2: &PspDirectoryEntry,
     data1: &[u8],
     data2: &[u8],
+    verbose: bool,
 ) -> Result<Comparison, String> {
+    // TODO: handle error!
+    if verbose {
+        println!("? {e1} vs {e2}");
+    }
     let d1 = e1.data(data1).unwrap();
     let d2 = e2.data(data2).unwrap();
     if d1.eq(&d2) {
@@ -134,7 +160,13 @@ fn diff_psp_entry(
     }
 }
 
-fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: &[u8]) {
+fn diff_psp_dirs(
+    dir1: &PspDirectory,
+    dir2: &PspDirectory,
+    data1: &[u8],
+    data2: &[u8],
+    verbose: bool,
+) {
     let mut common = Vec::<(PspDirectoryEntry, PspDirectoryEntry)>::new();
     let mut only_1 = Vec::<PspDirectoryEntry>::new();
     let mut only_2 = Vec::<PspDirectoryEntry>::new();
@@ -167,7 +199,7 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
-            match diff_psp_entry(e1, e2, data1, data2) {
+            match diff_psp_entry(e1, e2, data1, data2, verbose) {
                 Ok(r) => match r {
                     Comparison::Same => println!("= {e1} vs {e2}"),
                     Comparison::Diff => println!("≠ {e1} vs {e2}"),
@@ -181,7 +213,7 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
                 let b2 = MAPPING_MASK & e2.value as usize;
                 let d2 = PspDirectory::new(&data2[b2..]).unwrap();
                 println!("> SUB DIR");
-                diff_psp_dirs(&d1, &d2, data1, data2);
+                diff_psp_dirs(&d1, &d2, data1, data2, verbose);
                 println!("< SUB DIR");
             }
             if e1.kind == PspEntryType::PspLevel2ADir as u8
@@ -197,7 +229,7 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
                 let a2 = bd2.addr as usize;
                 let d2 = PspDirectory::new(&data2[a2..]).unwrap();
                 println!("> SUB DIR");
-                diff_psp_dirs(&d1, &d2, data1, data2);
+                diff_psp_dirs(&d1, &d2, data1, data2, verbose);
                 println!("< SUB DIR");
             }
         }
@@ -217,6 +249,7 @@ fn diff_psp_dirs(dir1: &PspDirectory, dir2: &PspDirectory, data1: &[u8], data2: 
     }
 }
 
+// TODO: support legact PSP with combo dirs
 fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let (psp1, data1) = p1;
     let (psp2, data2) = p2;
@@ -230,10 +263,12 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
 
     // FIXME: find a better interface?
     match psp1 {
-        Directory::PspCombo(_) => {}
+        Directory::PspCombo(_) => {
+            // TODO: check other dir here and factor out diff_psp_combo_dirs
+        }
         Directory::Psp(d1) => match psp2 {
             Directory::Psp(d2) => {
-                diff_psp_dirs(d1, d2, data1, data2);
+                diff_psp_dirs(d1, d2, data1, data2, verbose);
                 return;
             }
             // NOTE: We checked above that psp1 and psp2 are of the same kind.
@@ -303,15 +338,13 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     for (e1, e2) in common {
         println!("> Combo dir {e1} vs {e2}");
         // TODO: handle error
-        if verbose {
-            let b1 = MAPPING_MASK & e1.directory as usize;
-            let d1 = PspDirectory::new(&data1[b1..]).unwrap();
+        let b1 = MAPPING_MASK & e1.directory as usize;
+        let d1 = PspDirectory::new(&data1[b1..]).unwrap();
 
-            let b2 = MAPPING_MASK & e2.directory as usize;
-            let d2 = PspDirectory::new(&data2[b2..]).unwrap();
+        let b2 = MAPPING_MASK & e2.directory as usize;
+        let d2 = PspDirectory::new(&data2[b2..]).unwrap();
 
-            diff_psp_dirs(&d1, &d2, data1, data2);
-        }
+        diff_psp_dirs(&d1, &d2, data1, data2, verbose);
     }
 
     if !only_1.is_empty() {
@@ -398,7 +431,11 @@ fn diff_bios_entry(
     e2: &BiosDirectoryEntry,
     data1: &[u8],
     data2: &[u8],
+    verbose: bool,
 ) -> Result<Comparison, String> {
+    if verbose {
+        println!("? {e1} vs {e2}");
+    }
     let d1 = e1.data(data1).unwrap();
     let d2 = e2.data(data2).unwrap();
     if d1.eq(&d2) {
@@ -413,6 +450,7 @@ pub fn diff_bios_simple_dir_entries(
     dir2: &BiosDirectory,
     data1: &[u8],
     data2: &[u8],
+    verbose: bool,
 ) {
     let mut common = Vec::<(BiosDirectoryEntry, BiosDirectoryEntry)>::new();
     let mut only_1 = Vec::<BiosDirectoryEntry>::new();
@@ -443,14 +481,17 @@ pub fn diff_bios_simple_dir_entries(
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
-            let s1 = format!("{e1}");
-            let s2 = format!("{e2}");
-            match diff_bios_entry(e1, e2, data1, data2) {
-                Ok(r) => match r {
-                    Comparison::Same => println!("= {s1:94} vs {s2}"),
-                    Comparison::Diff => println!("≠ {s1:94} vs {s2}"),
-                },
-                Err(e) => println!("⚠️ {e1} vs {e2}: {e}"),
+            // TODO: enum
+            if e1.kind == 0x70 {
+                // TODO: level 2 dir
+            } else {
+                match diff_bios_entry(e1, e2, data1, data2, verbose) {
+                    Ok(r) => match r {
+                        Comparison::Same => println!("= {e1} vs {e2}"),
+                        Comparison::Diff => println!("≠ {e1} vs {e2}"),
+                    },
+                    Err(e) => println!("⚠️ {e1} vs {e2}: {e}"),
+                }
             }
         }
     }
@@ -459,8 +500,9 @@ pub fn diff_bios_simple_dir_entries(
         println!("entries only in 1:");
         for entry in only_1 {
             println!("{entry}");
+            // TODO: enum
             if entry.kind == 0x70 {
-                print_bios_dir(entry.source as usize, data1);
+                print_bios_dir_from_addr(entry.source as usize, data1);
             }
         }
         println!();
@@ -470,15 +512,23 @@ pub fn diff_bios_simple_dir_entries(
         println!("entries only in 2:");
         for entry in only_2 {
             println!("{entry}");
+            // TODO: enum
             if entry.kind == 0x70 {
-                print_bios_dir(entry.source as usize, data2);
+                print_bios_dir_from_addr(entry.source as usize, data2);
             }
         }
         println!();
     }
 }
 
-pub fn diff_bios_simple_dirs(dir1: &Directory, dir2: &Directory, data1: &[u8], data2: &[u8]) {
+// TODO: support combo dirs
+pub fn diff_bios_simple_dirs(
+    dir1: &Directory,
+    dir2: &Directory,
+    data1: &[u8],
+    data2: &[u8],
+    verbose: bool,
+) {
     match dir1 {
         Directory::Bios(d1) => match dir2 {
             Directory::Bios(d2) => {
@@ -486,7 +536,7 @@ pub fn diff_bios_simple_dirs(dir1: &Directory, dir2: &Directory, data1: &[u8], d
                 let c2 = d2.header.checksum;
                 println!("checksums {c1:08x} {c2:08x}");
 
-                diff_bios_simple_dir_entries(d1, d2, data1, data2);
+                diff_bios_simple_dir_entries(d1, d2, data1, data2, verbose);
             }
             _ => todo!(),
         },
@@ -500,14 +550,16 @@ fn diff_bioses(
     b2: &Result<Directory, String>,
     data1: &[u8],
     data2: &[u8],
+    verbose: bool,
 ) {
     match b1 {
         Ok(bios_dir1) => match b2 {
             Ok(bios_dir2) => {
-                diff_bios_simple_dirs(bios_dir1, bios_dir2, data1, data2);
+                diff_bios_simple_dirs(bios_dir1, bios_dir2, data1, data2, verbose);
             }
             Err(e) => {
-                // TODO: print other dir
+                println!("BIOS dir 1:");
+                print_bios_dir(bios_dir1, data1);
                 println!("BIOS dir 2: {e}");
             }
         },
@@ -516,7 +568,8 @@ fn diff_bioses(
             println!("BIOS dir 1: {e}");
             match b2 {
                 Ok(bios_dir2) => {
-                    // TODO: print dir
+                    println!("BIOS dir 2:");
+                    print_bios_dir(bios_dir2, data2);
                 }
                 Err(e) => {
                     println!("BIOS dir 2: {e}");
@@ -535,25 +588,25 @@ pub fn diff_bios(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     let b2 = rom2.bios_17_00_0f();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[0]);
-    diff_bioses(&b1, &b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2, verbose);
 
     let b1 = rom1.bios_17_10_1f();
     let b2 = rom2.bios_17_10_1f();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[1]);
-    diff_bioses(&b1, &b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2, verbose);
 
     let b1 = rom1.bios_17_30_3f_19_00_0f();
     let b2 = rom2.bios_17_30_3f_19_00_0f();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[2]);
-    diff_bioses(&b1, &b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2, verbose);
 
     let b1 = rom1.bios_17_60();
     let b2 = rom2.bios_17_60();
     println!();
     println!("diffing {}", BIOS_DIR_NAMES[3]);
-    diff_bioses(&b1, &b2, data1, data2);
+    diff_bioses(&b1, &b2, data1, data2, verbose);
 }
 
 fn diff_addr(a1: Option<u32>, a2: Option<u32>) -> String {

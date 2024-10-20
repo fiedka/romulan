@@ -30,7 +30,7 @@ impl Display for BiosDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let d = self.destination;
         let dest = if d == 0xffff_ffff_ffff_ffff || d == 0x0000_0000_0000_0000 {
-            String::from("")
+            String::from("            ")
         } else {
             format!(" -> {:08x}", self.destination)
         };
@@ -51,16 +51,23 @@ impl Display for BiosDirectoryEntry {
 // TODO: this was the original value - but it errors for some entries...
 // const BIOS_ENTRY_MASK: usize = 0x01FF_FFFF;
 const BIOS_ENTRY_MASK: usize = 0x00FF_FFFF;
+const BIOS_BIN_ENTRY_MASK: usize = 0x01FF_FFFF;
 
 impl BiosDirectoryEntry {
     pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
-        let start = BIOS_ENTRY_MASK & self.source as usize;
+        let m = if self.kind == 0x62 {
+            BIOS_BIN_ENTRY_MASK
+        } else {
+            BIOS_ENTRY_MASK
+        };
+        let start = m & self.source as usize;
         let end = start + self.size as usize;
-        if end <= data.len() {
+        let l = data.len();
+        if end <= l {
             Ok(data[start..end].to_vec().into_boxed_slice())
         } else {
             Err(format!(
-                "BIOS directory entry invalid: {:08X}:{:08X}",
+                "BIOS directory entry invalid: range {:08X}:{:08X} exceeds {l:08x}",
                 start, end
             ))
         }

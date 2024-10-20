@@ -10,7 +10,9 @@ use std::{fs, io, mem, thread};
 use uefi::guid::SECTION_LZMA_COMPRESS_GUID;
 
 pub mod diff_amd;
-use diff_amd::{diff_bios, diff_efs, diff_psp, print_bios_dir, print_psp_dirs, BIOS_DIR_NAMES};
+use diff_amd::{
+    diff_bios, diff_efs, diff_psp, print_bios_dir_from_addr, print_psp_dirs, BIOS_DIR_NAMES,
+};
 
 const K: usize = 1024;
 
@@ -224,7 +226,7 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
             println!();
             println!("=== {} ===", BIOS_DIR_NAMES[i]);
             if *dir != 0x0000_0000 && *dir != 0xffff_ffff {
-                print_bios_dir(*dir as usize, data);
+                print_bios_dir_from_addr(*dir as usize, data);
             } else {
                 println!();
                 println!("no BIOS dir @ {dir:08x}");
