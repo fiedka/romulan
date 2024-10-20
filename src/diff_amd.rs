@@ -255,7 +255,6 @@ fn diff_psp_dirs(
     }
 }
 
-// TODO: support legact PSP with combo dirs
 fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let (psp1, data1) = p1;
     let (psp2, data2) = p2;
@@ -549,7 +548,7 @@ pub fn diff_bios_simple_dirs(
     }
 }
 
-// TODO: align with diff_psp_dirs
+// TODO: align with PSP diffing?
 fn diff_bioses(
     b1: &Result<Directory, String>,
     b2: &Result<Directory, String>,
@@ -568,7 +567,6 @@ fn diff_bioses(
                 println!("BIOS dir 2: {e}");
             }
         },
-        // TODO: print other dir if possible
         Err(e) => {
             println!("BIOS dir 1: {e}");
             match b2 {
@@ -585,7 +583,7 @@ fn diff_bioses(
 }
 
 pub fn diff_bios(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
-    println!("TODO: not yet complete");
+    println!("NOTE: not yet complete, missing combo directory support");
     let data1 = rom1.data();
     let data2 = rom2.data();
 
