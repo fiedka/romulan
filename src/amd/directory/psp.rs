@@ -47,29 +47,18 @@ pub enum PspEntryType {
 
 impl Display for PspDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // soft fuse
-        if self.kind == PspEntryType::SoftFuseChain as u8 {
+        let kind = self.kind;
+        let sub = self.sub_program;
+        let desc = self.description();
+        let v = if self.kind == PspEntryType::SoftFuseChain as u8 {
             // There may be semantics behind this. It is often 1 or 0.
             // coreboot refers to non-public NDA docs for explanation.
             // https://doc.coreboot.org/soc/amd/psp_integration.html
-            write!(
-                f,
-                "{:02x}.{} ({}): 0x{:08x}",
-                self.kind,
-                self.sub_program,
-                self.description(),
-                self.value
-            )
+            format!("0x{:08x}", self.value)
         } else {
-            write!(
-                f,
-                "{:02x}.{} ({}) @ 0x{:08x}",
-                self.kind,
-                self.sub_program,
-                self.description(),
-                self.value
-            )
-        }
+            format!("{:08x} @ {:08x}", self.size, self.value)
+        };
+        write!(f, "{kind:02x}.{sub} {desc:52} {v:20}",)
     }
 }
 
@@ -87,13 +76,12 @@ impl PspDirectoryEntry {
         };
 
         let end = start + self.size as usize;
-        let l = data.len();
-        if end <= l {
+        let len = data.len();
+        if end <= len {
             Ok(data[start..end].to_vec().into_boxed_slice())
         } else {
-            Err(format!(
-                "PSP directory entry invalid: {start:08X}:{end:08X} within {l:08x}"
-            ))
+            let r = format!("{start:08x}:{end:08x}");
+            Err(format!("{self} invalid: {r} exceedis size {len:08x}"))
         }
     }
 
@@ -109,6 +97,7 @@ impl PspDirectoryEntry {
         }
     }
 
+    // SMU binaries should start with "SMURULESSMURULES"
     pub fn description(&self) -> &'static str {
         match self.kind {
             0x00 => "AMD Public Key",

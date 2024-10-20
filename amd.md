@@ -2,7 +2,9 @@
 
 The knowledge here stems in part from the existing Romulan code, plus other
 sources, including:
-- [coreboot docs](https://doc.coreboot.org/soc/amd/psp_integration.html)
+- coreboot docs on
+  * [PSP integration](https://doc.coreboot.org/soc/amd/psp_integration.html)
+  * [Family 17h](https://doc.coreboot.org/soc/amd/family17h.html)
 - coreboot util/amdfwtool
 - [PSPReverse](https://github.com/PSPReverse)
 - [Fiano](https://github.com/linuxboot/fiano/)

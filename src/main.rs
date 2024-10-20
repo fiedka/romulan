@@ -271,6 +271,10 @@ fn main() -> io::Result<()> {
         let rom1 = amd::Rom::new(&data1).unwrap();
         let rom2 = amd::Rom::new(&data2).unwrap();
         if verbose {
+            println!("data1: {}", data1.len());
+            println!("data2: {}", data2.len());
+        }
+        if verbose {
             println!(": Image 1 :");
             print_amd(&rom1, print_json);
             println!(": Image 2 :");
