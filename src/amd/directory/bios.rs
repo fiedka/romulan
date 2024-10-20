@@ -7,6 +7,13 @@ use zerocopy::{AsBytes, FromBytes, LayoutVerified as LV};
 
 use super::{ComboDirectoryEntry, ComboDirectoryHeader, DirectoryHeader};
 
+// From coreboot commit 30cf1551683810504f7823e42d4cb6515459cff8:
+// > In modern AMD systems, the PSP brings up DRAM then uncompresses the
+// > BIOS image into memory prior to x86 beginning execution.
+// > The PSP supports a zlib engine, and interprets the first 256 bytes as a
+// > header, where offset 0x14 containing the uncompressed size.
+// > For further details, see AMD Platform Security Processor BIOS Architecture
+// > Design Guide for AMD Family 17h Processors (NDA only, #55758).
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
 #[repr(C)]
 pub struct BiosBinaryHeader {

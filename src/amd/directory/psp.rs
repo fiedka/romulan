@@ -51,9 +51,12 @@ impl Display for PspDirectoryEntry {
         let sub = self.sub_program;
         let desc = self.description();
         let v = if self.kind == PspEntryType::SoftFuseChain as u8 {
-            // There may be semantics behind this. It is often 1 or 0.
-            // coreboot refers to non-public NDA docs for explanation.
-            // https://doc.coreboot.org/soc/amd/psp_integration.html
+            // It is often just 1 or 0. There may be other bits.
+            // From coreboot `src/soc/amd/genoa_poc/Makefile.mk`:
+            // See #57299 (NDA) for bit definitions.
+            // set-bit=$(call int-shift-left, 1 $(call _toint,$1))
+            // PSP_SOFTFUSE=$(shell A=$(call int-add, \
+            // $(foreach bit,$(sort $(PSP_SOFTFUSE_BITS)),$(call set-bit,$(bit)))); printf "0x%x" $$A)
             format!("0x{:08x}", self.value)
         } else {
             format!("{:08x} @ {:08x}", self.size, self.value)
@@ -173,6 +176,7 @@ impl PspDirectoryEntry {
             0x52 => "OEM PSP Boot Loader Application",
             0x53 => "OEM PSP Boot Loader Application Public Key",
             0x54 => "PSP RPMC NVRAM",
+            // SPL table file in coreboot src/soc/amd/genoa_poc/Makefile.mk
             0x55 => "PSP Boot Loader Anti-rollback",
             0x56 => "PSP Secure OS Anti-rollback",
             0x57 => "CVIP Configuration Table",
@@ -183,6 +187,7 @@ impl PspDirectoryEntry {
             0x5C => "SPI ROM Configuration",
             0x5D => "MPIO",
             0x5F => "PSP SMU SCS (Fam. 15h+16h), TPM lite (Fam. 17h+19h)",
+            /* 0x60 - 0x70 are BIOS directory types, maybe unused here */
             0x71 => "DMCUB",
             0x73 => "PSP Boot Loader AB",
             0x76 => "RIB",

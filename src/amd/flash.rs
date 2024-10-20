@@ -31,9 +31,8 @@ pub struct EFS {
     pub bios_17_10_1f: u32,
     /// 0x20: BIOS directory for family 17 models 30 to 3f and family 19 models 00 to 0f
     pub bios_17_30_3f_19_00_0f: u32,
-    /// 0x24: bit 0 is set to 0 if this is a second generation structure
-    /// coreboot util/amdfwtool says: introduced after RAVEN/PICASSO
-    pub second_gen: u32,
+    /// 0x24: Processor generation
+    pub gen: Gen,
     /// 0x28: BIOS directory for family 17 model 60 and later
     pub bios_17_60: u32,
     pub _2c: u32,
@@ -66,15 +65,29 @@ pub fn get_real_addr(addr: u32) -> Option<u32> {
     }
 }
 
+/// bit 0 is set to 0 if this is a second generation structure
+/// coreboot util/amdfwtool says: introduced after RAVEN/PICASSO
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
+#[repr(C)]
+pub struct Gen(u32);
+
+impl Display for Gen {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 & 0x1 == 0 {
+            write!(f, "Second gen (after Picasso/Raven Ridge)")
+        } else {
+            write!(f, "First gen (up to Picasso/Raven Ridge)")
+        }
+    }
+}
+
 impl Display for EFS {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let efs = self;
-        writeln!(f, ": EFS :")?;
+        let gen = self.gen;
+        writeln!(f, "EFS: {gen}")?;
 
-        let is_gen2 = efs.second_gen & 0x1 == 0;
-        writeln!(f, ":: Second gen? {is_gen2}")?;
-
-        writeln!(f, ":: Firmware ::")?;
+        writeln!(f, "Firmware:")?;
         let a = get_real_addr(efs.imc_fw);
         writeln!(f, " IMC Firmware                                  {a:08x?}")?;
         let a = get_real_addr(efs.gbe_fw);
@@ -98,7 +111,7 @@ impl Display for EFS {
         let a = get_real_addr(efs.lp_promontory);
         writeln!(f, " LP Promontory firmware                        {a:08x?}")?;
 
-        writeln!(f, ":: SPI flash configuration ::")?;
+        writeln!(f, "SPI flash configuration:")?;
         let s1 = efs.spi_cfg_15_60_6f;
         let s2 = efs.spi_cfg_17_00_1f;
         let s3 = efs.spi_cfg_17_30;

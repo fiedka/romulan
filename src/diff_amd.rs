@@ -634,6 +634,10 @@ fn diff_addr(a1: Option<u32>, a2: Option<u32>) -> String {
 
 // TODO: SPI flash configuration
 pub fn diff_efs(efs1: &EFS, efs2: &EFS) {
+    let gen1 = efs1.gen;
+    let gen2 = efs2.gen;
+    println!("{gen1} vs {gen2}");
+
     let a1 = get_real_addr(efs1.imc_fw);
     let a2 = get_real_addr(efs2.imc_fw);
     let diff = diff_addr(a1, a2);
