@@ -368,7 +368,7 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
             println!("> Combo dir {e}");
             let b = MAPPING_MASK & e.directory as usize;
             let d = PspDirectory::new(&data2[b..]).unwrap();
-            print_psp_dir(&d.entries, data1);
+            print_psp_dir(&d.entries, data2);
         }
     }
 }
@@ -495,7 +495,12 @@ pub fn diff_bios_simple_dir_entries(
         println!("common:");
         for (e1, e2) in common.iter() {
             if e1.kind == BiosEntryType::BiosLevel2Dir as u8 {
-                // TODO: level 2 dir
+                let b1 = MAPPING_MASK & e1.source as usize;
+                let b2 = MAPPING_MASK & e2.source as usize;
+                let d1 = Directory::new(&data1[b1..]);
+                let d2 = Directory::new(&data2[b2..]);
+                println!("diffing level 2 directories:");
+                diff_bioses(&d1, &d2, data1, data2, verbose);
             } else {
                 match diff_bios_entry(e1, e2, data1, data2, verbose) {
                     Ok(r) => match r {
