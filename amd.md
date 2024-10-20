@@ -12,6 +12,9 @@ sources, including:
 - [Wikichip](https://en.wikichip.org/wiki/amd)
 - [Mimoja's tools](https://github.com/Mimoja/amdfw)
 
+For clarification, AMD provides [a short list of their own specific acronyms](
+https://www.amd.com/content/dam/amd/en/documents/resources/glossary-of-terms.pdf).
+
 ## Embedded Firmware Structure (EFS)
 
 This is the entry point to everything else, pointing to firmware for
