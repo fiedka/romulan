@@ -3,9 +3,12 @@
 The knowledge here stems in part from the existing Romulan code, plus other
 sources, including:
 - coreboot docs on
-  * [PSP integration](https://doc.coreboot.org/soc/amd/psp_integration.html)
+  * [Family 15h](https://doc.coreboot.org/soc/amd/family15h.html)
   * [Family 17h](https://doc.coreboot.org/soc/amd/family17h.html)
-- coreboot util/amdfwtool
+  * [PSP integration](https://doc.coreboot.org/soc/amd/psp_integration.html)
+- coreboot code
+  * [`util/amdfwtool`](https://github.com/coreboot/coreboot/tree/master/util/amdfwtool)
+  * [`util/cbfstool/amdcompress.c`](https://github.com/coreboot/coreboot/tree/master/util/cbfstool)
 - [PSPReverse](https://github.com/PSPReverse)
 - [Fiano](https://github.com/linuxboot/fiano/)
 - [Wikipedia](https://en.wikipedia.org/wiki/Table_of_AMD_processors)
@@ -57,3 +60,28 @@ variants of a processor that can run the same PSP code.
 Which code is being run and how it is selected will need to be determined by
 the PSP mask ROM. In the case of immediate (non-combo) high level entries, it
 may just take what's there and fail or bail out on error; needs investigation.
+
+The platform boot flow starts with a lot happening on the PSP. Reworked from
+[coreboot docs](https://doc.coreboot.org/soc/amd/family17h.html):
+
+- System power on
+- PSP executes immutable on-chip boot ROM
+- PSP locates the Embedded Firmware Table and PSP Directory Table in the SPI ROM
+- PSP verifies and executes the PSP off-chip bootloader
+- (OEM specifics; omitted here)
+- PSP parses the PSP Directory Table to find the ABLs and executes them
+- An ABL parses the APCB for system configuration preferences
+- An ABL
+  1. initializes system main memory
+  2. locates the compressed BIOS image in the SPI ROM
+  3. decompresses it into DRAM
+- An ABL writes the APOB to DRAM for consumption by the x86-based AGESA
+- PSP releases the x86 processor from reset.
+
+Finally, the x86 core fetches and executes instructions from the reset vector.
+
+The terms used are explained in the coreboot docs. Briefly:
+- Embedded Firmware Table probably means the EFS here
+- ABL is AGESA bootloader
+- APCB is AMD PSP Customization Block
+- APOB is AMD PSP Ouput Buffer
