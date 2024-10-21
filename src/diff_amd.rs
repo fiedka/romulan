@@ -1,9 +1,12 @@
+use core::convert::TryFrom;
 use romulan::amd;
 use romulan::amd::directory::{
     BiosComboDirectory, BiosDirectory, BiosDirectoryEntry, BiosEntryType, ComboDirectoryEntry,
-    Directory, PspBackupDir, PspComboDirectory, PspDirectory, PspDirectoryEntry, PspEntryType,
+    Directory, PspBackupDir, PspBinaryHeader, PspComboDirectory, PspDirectory, PspDirectoryEntry,
+    PspEntryType,
 };
 use romulan::amd::flash::{get_real_addr, EFS};
+use zerocopy::FromBytes;
 
 const MAPPING_MASK: usize = 0x00ff_ffff;
 
@@ -32,43 +35,54 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
     }
 }
 
+// Level A sample
+// 00299000: 12d4 7558 ffff ffff 0200 0000 00ff ffff  ..uX............
+// 00299010: 0010 0200 0009 0dbc ffff ffff ffff ffff  ................
+//
+// Level B sample
+// 0029a000: 2784 0dd9 0100 0000 0200 0000 00ff ffff  '...............
+// 0029a010: 00c0 1500 0009 0dbc ffff ffff ffff ffff  ................
 fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
     for e in dir {
-        println!("- {e}");
-        if e.kind == PspEntryType::PspLevel2Dir as u8 {
+        let k = PspEntryType::try_from(e.kind);
+        let v = if k.is_err() {
             let b = MAPPING_MASK & e.value as usize;
-            println!();
-            match PspDirectory::new(&data[b..]) {
-                Ok(d) => {
-                    println!("| {d}");
-                    print_psp_dir(&d.entries, data);
-                }
-                Err(e) => {
-                    println!("Cannot parse level 2 directory @ {b:08x}: {e}");
-                }
+            if let Some(h) = PspBinaryHeader::read_from_prefix(&data[b..]) {
+                format!("{}", h.version)
+            } else {
+                "".to_string()
             }
-            println!();
-        }
-        // Level A sample
-        // 00299000: 12d4 7558 ffff ffff 0200 0000 00ff ffff  ..uX............
-        // 00299010: 0010 0200 0009 0dbc ffff ffff ffff ffff  ................
-        //
-        // Level B sample
-        // 0029a000: 2784 0dd9 0100 0000 0200 0000 00ff ffff  '...............
-        // 0029a010: 00c0 1500 0009 0dbc ffff ffff ffff ffff  ................
-        //
-        // PSP Level 2 A dir, Level 2 B dir
-        if e.kind == PspEntryType::PspLevel2ADir as u8
-            || e.kind == PspEntryType::PspLevel2BDir as u8
-        {
-            let b = MAPPING_MASK & e.value as usize;
-            let bd = PspBackupDir::new(&data[b..]).unwrap();
-            let a = bd.addr as usize;
-            let d = PspDirectory::new(&data[a..]).unwrap();
-            println!();
-            println!("| {d}");
-            print_psp_dir(&d.entries, data);
-            println!();
+        } else {
+            "".to_string()
+        };
+        println!("- {e} {v}");
+        match k {
+            Ok(PspEntryType::PspLevel2Dir) => {
+                let b = MAPPING_MASK & e.value as usize;
+                println!();
+                match PspDirectory::new(&data[b..]) {
+                    Ok(d) => {
+                        println!("| {d}");
+                        print_psp_dir(&d.entries, data);
+                    }
+                    Err(e) => {
+                        println!("Cannot parse level 2 directory @ {b:08x}: {e}");
+                    }
+                }
+                println!();
+            }
+            Ok(PspEntryType::PspLevel2ADir | PspEntryType::PspLevel2BDir) => {
+                let b = MAPPING_MASK & e.value as usize;
+                let bd = PspBackupDir::new(&data[b..]).unwrap();
+                let a = bd.addr as usize;
+                let d = PspDirectory::new(&data[a..]).unwrap();
+                println!();
+                println!("| {d}");
+                print_psp_dir(&d.entries, data);
+                println!();
+            }
+            Ok(PspEntryType::SoftFuseChain) => {}
+            _ => {}
         }
     }
 }

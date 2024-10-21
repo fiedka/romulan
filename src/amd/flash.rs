@@ -4,6 +4,12 @@ use core::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
+// AMD families
+// 15h/Bulldozer https://doc.coreboot.org/soc/amd/family15h.html:
+// - models 60h-6Fh (Merlin Falcon)
+// - models 70h-7Fh (Stoney Ridge)
+// 17h/Zen ff https://doc.coreboot.org/soc/amd/family17h.html
+
 /// Embedded Firmware Structure
 ///
 /// https://doc.coreboot.org/soc/amd/psp_integration.html
@@ -19,7 +25,7 @@ pub struct EFS {
     pub xhci_fw: u32,
 
     /* PSP */
-    /// 0x10: PSP directory for ...
+    /// 0x10: PSP directory for family 15h to before family 17h?
     pub psp_legacy: u32,
     /// 0x14: PSP directory for family 17 models 00 and later
     pub psp_17_00: u32,

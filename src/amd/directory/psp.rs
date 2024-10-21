@@ -1,11 +1,71 @@
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, vec::Vec};
+use core::convert::TryFrom;
 use core::fmt::{self, Display};
 use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes, LayoutVerified as LV};
 
 use super::{ComboDirectoryEntry, ComboDirectoryHeader, DirectoryHeader};
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
+#[repr(C)]
+pub struct Version {
+    rev: u8,
+    patch: u8,
+    minor: u8,
+    major: u8,
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let j = self.major;
+        let i = self.minor;
+        let p = self.patch;
+        let r = self.rev;
+        if (j == 0 && i == 0 && p == 0 && r == 0)
+            || (j == 0xff && i == 0xff && p == 0xff && r == 0xff)
+        {
+            write!(f, "unversioned")
+        } else {
+            write!(
+                f,
+                "{:02x}.{:02x}.{:02x}.{:02x}",
+                self.major, self.minor, self.patch, self.rev
+            )
+        }
+    }
+}
+
+/// coreboot util/amdfwtool/amdfwtool.h, 0x100 size header
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
+#[repr(C)]
+pub struct PspBinaryHeader {
+    pub _00: [u8; 20],
+    pub fw_size_signed: u32,
+    pub _18: [u8; 24],
+    // 1 if the image is signed, 0 otherwise
+    pub sig_opt: u32,
+    pub sid_id: u32,
+    pub sig_param: [u8; 16],
+    pub comp_opt: u32,
+    pub _4c: [u8; 4],
+    pub uncomp_size: u32,
+    pub comp_size: u32,
+    // Starting with Mendecino, fw_id is populated instead of fw_type
+    pub fw_id: u16,
+    pub _5a: [u8; 6],
+    pub version: Version,
+    pub _64: [u8; 8],
+    pub size_total: u32,
+    pub _70: [u8; 12],
+    // fw_type will still be around for backwards compatibility
+    pub fw_type: u8,
+    pub fw_subtype: u8,
+    pub fw_subprog: u8,
+    pub reserved_7f: u8,
+    pub _rest: [u8; 128],
+}
 
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
 #[repr(C)]
@@ -45,6 +105,17 @@ pub enum PspEntryType {
     PspLevel2BDir = 0x4a,
 }
 
+impl TryFrom<u8> for PspEntryType {
+    type Error = &'static str;
+
+    fn try_from(v: u8) -> Result<PspEntryType, Self::Error> {
+        match v {
+            0x0b => Ok(PspEntryType::SoftFuseChain),
+            _ => Err("unknown PSP entry type"),
+        }
+    }
+}
+
 impl Display for PspDirectoryEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let kind = self.kind;
@@ -66,6 +137,7 @@ impl Display for PspDirectoryEntry {
 }
 
 impl PspDirectoryEntry {
+    // TODO: return a (header, body) tuple here or a struct?
     pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
         let value = (self.value as usize) & ADDR_MASK;
         if self.size == 0xFFFF_FFFF {
