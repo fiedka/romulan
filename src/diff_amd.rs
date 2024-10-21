@@ -33,18 +33,20 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
     }
 }
 
-fn get_psp_bin_version(e: &PspDirectoryEntry, data: &[u8]) -> String {
+fn get_psp_bin_header_info(e: &PspDirectoryEntry, data: &[u8]) -> String {
     let v = match e.data(data) {
         Ok((h, _)) => {
             if let Some(h) = h {
-                format!("{}", h.version)
+                let v = h.version;
+                let m = h.maybe_magic;
+                format!("{m} {v}")
             } else {
                 "".to_string()
             }
         }
         _ => "".to_string(),
     };
-    format!("{v:11}")
+    format!("{v:16}")
 }
 
 // Level A sample
@@ -57,7 +59,7 @@ fn get_psp_bin_version(e: &PspDirectoryEntry, data: &[u8]) -> String {
 fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
     for e in dir {
         let k = PspEntryType::try_from(e.kind);
-        let v = get_psp_bin_version(e, data);
+        let v = get_psp_bin_header_info(e, data);
         println!("- {e}{v}");
         match k {
             Ok(PspEntryType::PspLevel2Dir) => {
@@ -222,8 +224,8 @@ fn diff_psp_dirs(
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
-            let v1 = get_psp_bin_version(e1, data1);
-            let v2 = get_psp_bin_version(e2, data2);
+            let v1 = get_psp_bin_header_info(e1, data1);
+            let v2 = get_psp_bin_header_info(e2, data2);
             let vs = format!("{e1}{v1} vs {e2}{v2}");
             match diff_psp_entry(e1, e2, data1, data2, verbose) {
                 Ok(r) => match r {

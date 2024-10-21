@@ -37,13 +37,46 @@ impl Display for Version {
     }
 }
 
+// NOTE: rustfmt always wants to put comments after the previuos line
+#[rustfmt::skip] 
+const KNOWN_MAGICS: [&str; 12] = [
+    // seen for most binaries
+    "$PS1",
+    // alternative variants for AGESA binaries
+    "0BAB", "0BAW",
+    // typical for AGESA binaries, but not always
+    "AW0B", "AW1B", "AW2B", "AW3B", "AW4B", "AW5B", "AW6B", "AW7B", "AW8B",
+];
+
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
+#[repr(C)]
+pub struct Magic([u8; 4]);
+
+impl Display for Magic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let m = match core::str::from_utf8(&self.0) {
+            Ok(s) => {
+                if KNOWN_MAGICS.contains(&s) {
+                    s.to_string()
+                } else {
+                    "".to_string()
+                }
+            }
+            Err(_) => "".to_string(),
+        };
+        write!(f, "{m:4}")
+    }
+}
+
 /// coreboot util/amdfwtool/amdfwtool.h, 0x100 size header
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
 #[repr(C)]
 pub struct PspBinaryHeader {
-    pub _00: [u8; 20],
+    pub _00: [u8; 16],
+    pub maybe_magic: Magic,
     pub fw_size_signed: u32,
-    pub _18: [u8; 24],
+    pub _10: [u8; 8],
+    pub _18: [u8; 16],
     // 1 if the image is signed, 0 otherwise
     pub sig_opt: u32,
     pub sid_id: u32,
