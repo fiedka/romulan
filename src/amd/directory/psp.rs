@@ -99,18 +99,56 @@ const MAPPING_MASK: usize = 0x00ff_ffff;
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum PspEntryType {
+    AmdPublicKey = 0x00,
+    PspNonVolatileData = 0x04,
+    SmuFirmware = 0x08,
+    AmdSecureDebugKey = 0x09,
+    OemPublicKey = 0x0a,
     SoftFuseChain = 0x0b,
+    PspTrustletPublicKey = 0x0d,
+    SmuFirmware2 = 0x12,
+    WrappedIKEK = 0x21,
+    PspTokenUnlock = 0x22,
     PspLevel2Dir = 0x40,
+    DxioPhySramFirmwarePublicKey = 0x43,
+    UsbPhyFirmware = 0x44,
     PspLevel2ADir = 0x48,
     PspLevel2BDir = 0x4a,
+    PmuPublicKey = 0x4e,
+    PspBootLoaderPublicKeysTable = 0x50,
+    PspTrustedOSPublicKeysTable = 0x51,
+    PspRpmcNvram = 0x54,
+    DmcuEram = 0x58,
+    DmcuIsr = 0x59,
 }
 
+// FIXME: This dulpication is very tedious and prone to error.
 impl TryFrom<u8> for PspEntryType {
     type Error = &'static str;
 
     fn try_from(v: u8) -> Result<PspEntryType, Self::Error> {
         match v {
+            0x00 => Ok(PspEntryType::AmdPublicKey),
+            0x04 => Ok(PspEntryType::PspNonVolatileData),
+            0x08 => Ok(PspEntryType::SmuFirmware),
+            0x09 => Ok(PspEntryType::AmdSecureDebugKey),
+            0x0a => Ok(PspEntryType::OemPublicKey),
             0x0b => Ok(PspEntryType::SoftFuseChain),
+            0x0d => Ok(PspEntryType::PspTrustletPublicKey),
+            0x12 => Ok(PspEntryType::SmuFirmware2),
+            0x21 => Ok(PspEntryType::WrappedIKEK),
+            0x22 => Ok(PspEntryType::PspTokenUnlock),
+            0x40 => Ok(PspEntryType::PspLevel2Dir),
+            0x43 => Ok(PspEntryType::DxioPhySramFirmwarePublicKey),
+            0x44 => Ok(PspEntryType::UsbPhyFirmware),
+            0x48 => Ok(PspEntryType::PspLevel2ADir),
+            0x4a => Ok(PspEntryType::PspLevel2BDir),
+            0x4e => Ok(PspEntryType::PmuPublicKey),
+            0x50 => Ok(PspEntryType::PspBootLoaderPublicKeysTable),
+            0x51 => Ok(PspEntryType::PspTrustedOSPublicKeysTable),
+            0x54 => Ok(PspEntryType::PspRpmcNvram),
+            0x58 => Ok(PspEntryType::DmcuEram),
+            0x59 => Ok(PspEntryType::DmcuIsr),
             _ => Err("unknown PSP entry type"),
         }
     }
@@ -132,16 +170,18 @@ impl Display for PspDirectoryEntry {
         } else {
             format!("{:08x} @ {:08x}", self.size, self.value)
         };
-        write!(f, "{kind:02x}.{sub} {desc:52} {v:20}",)
+        write!(f, "{kind:02x}.{sub:02x} {desc:52} {v:20}",)
     }
 }
 
+const PSP_BIN_HEADER_SIZE: usize = core::mem::size_of::<PspBinaryHeader>();
+
 impl PspDirectoryEntry {
-    // TODO: return a (header, body) tuple here or a struct?
-    pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
+    pub fn data(&self, data: &[u8]) -> Result<(Option<PspBinaryHeader>, Box<[u8]>), String> {
         let value = (self.value as usize) & ADDR_MASK;
         if self.size == 0xFFFF_FFFF {
-            return Ok(value.to_le_bytes().to_vec().into_boxed_slice());
+            let body = value.to_le_bytes().to_vec().into_boxed_slice();
+            return Ok((None, body));
         }
 
         let start = match self.addr_mode() {
@@ -153,7 +193,44 @@ impl PspDirectoryEntry {
         let end = start + self.size as usize;
         let len = data.len();
         if end <= len {
-            Ok(data[start..end].to_vec().into_boxed_slice())
+            let k = PspEntryType::try_from(self.kind);
+            Ok(match k {
+                // TODO: extend list of headerless / special entries
+                Ok(
+                    PspEntryType::AmdPublicKey
+                    | PspEntryType::PspNonVolatileData
+                    | PspEntryType::AmdSecureDebugKey
+                    | PspEntryType::OemPublicKey
+                    | PspEntryType::PspTrustletPublicKey
+                    | PspEntryType::WrappedIKEK
+                    | PspEntryType::PspTokenUnlock
+                    | PspEntryType::PspLevel2Dir
+                    | PspEntryType::PspLevel2ADir
+                    | PspEntryType::PspLevel2BDir
+                    | PspEntryType::DxioPhySramFirmwarePublicKey
+                    | PspEntryType::UsbPhyFirmware
+                    | PspEntryType::PmuPublicKey
+                    | PspEntryType::PspBootLoaderPublicKeysTable
+                    | PspEntryType::PspTrustedOSPublicKeysTable
+                    | PspEntryType::PspRpmcNvram
+                    | PspEntryType::DmcuEram
+                    | PspEntryType::DmcuIsr,
+                ) => {
+                    let body = data[start..end].to_vec().into_boxed_slice();
+                    (None, body)
+                }
+                _ => {
+                    let s = start + PSP_BIN_HEADER_SIZE;
+                    if s < end {
+                        let h = PspBinaryHeader::read_from_prefix(&data[start..]);
+                        let body = data[s..end].to_vec().into_boxed_slice();
+                        (h, body)
+                    } else {
+                        let body = data[start..end].to_vec().into_boxed_slice();
+                        (None, body)
+                    }
+                }
+            })
         } else {
             let r = format!("{start:08x}:{end:08x}");
             Err(format!("{self} invalid: {r} exceedis size {len:08x}"))
@@ -194,7 +271,7 @@ impl PspDirectoryEntry {
             0x14 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x1A => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x1B => "Boot Driver",
-            0x1C => "SoC_Driver",
+            0x1C => "SoC Driver",
             0x1D => "Debug Driver",
             0x1F => "Interface Driver",
             0x20 => "IP Discovery",
@@ -244,7 +321,7 @@ impl PspDirectoryEntry {
             0x4E => "PMU Public Key",
             0x4F => "UMC Firmware",
             0x50 => "PSP Boot Loader Public Keys Table",
-            0x51 => "PSP tOS Public Keys Table",
+            0x51 => "PSP Trusted OS Public Keys Table",
             0x52 => "OEM PSP Boot Loader Application",
             0x53 => "OEM PSP Boot Loader Application Public Key",
             0x54 => "PSP RPMC NVRAM",

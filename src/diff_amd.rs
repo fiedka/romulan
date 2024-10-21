@@ -2,11 +2,9 @@ use core::convert::TryFrom;
 use romulan::amd;
 use romulan::amd::directory::{
     BiosComboDirectory, BiosDirectory, BiosDirectoryEntry, BiosEntryType, ComboDirectoryEntry,
-    Directory, PspBackupDir, PspBinaryHeader, PspComboDirectory, PspDirectory, PspDirectoryEntry,
-    PspEntryType,
+    Directory, PspBackupDir, PspComboDirectory, PspDirectory, PspDirectoryEntry, PspEntryType,
 };
 use romulan::amd::flash::{get_real_addr, EFS};
-use zerocopy::FromBytes;
 
 const MAPPING_MASK: usize = 0x00ff_ffff;
 
@@ -35,6 +33,20 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
     }
 }
 
+fn get_psp_bin_version(e: &PspDirectoryEntry, data: &[u8]) -> String {
+    let v = match e.data(data) {
+        Ok((h, _)) => {
+            if let Some(h) = h {
+                format!("{}", h.version)
+            } else {
+                "".to_string()
+            }
+        }
+        _ => "".to_string(),
+    };
+    format!("{v:11}")
+}
+
 // Level A sample
 // 00299000: 12d4 7558 ffff ffff 0200 0000 00ff ffff  ..uX............
 // 00299010: 0010 0200 0009 0dbc ffff ffff ffff ffff  ................
@@ -45,17 +57,8 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
 fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
     for e in dir {
         let k = PspEntryType::try_from(e.kind);
-        let v = if k.is_err() {
-            let b = MAPPING_MASK & e.value as usize;
-            if let Some(h) = PspBinaryHeader::read_from_prefix(&data[b..]) {
-                format!("{}", h.version)
-            } else {
-                "".to_string()
-            }
-        } else {
-            "".to_string()
-        };
-        println!("- {e} {v}");
+        let v = get_psp_bin_version(e, data);
+        println!("- {e}{v}");
         match k {
             Ok(PspEntryType::PspLevel2Dir) => {
                 let b = MAPPING_MASK & e.value as usize;
@@ -166,8 +169,8 @@ fn diff_psp_entry(
         println!("2: {e2:#08x?}");
     }
     match e1.data(data1) {
-        Ok(d1) => match e2.data(data2) {
-            Ok(d2) => {
+        Ok((_h1, d1)) => match e2.data(data2) {
+            Ok((_h2, d2)) => {
                 if d1.eq(&d2) {
                     Ok(Comparison::Same)
                 } else {
@@ -219,12 +222,15 @@ fn diff_psp_dirs(
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
+            let v1 = get_psp_bin_version(e1, data1);
+            let v2 = get_psp_bin_version(e2, data2);
+            let vs = format!("{e1}{v1} vs {e2}{v2}");
             match diff_psp_entry(e1, e2, data1, data2, verbose) {
                 Ok(r) => match r {
-                    Comparison::Same => println!("= {e1} vs {e2}"),
-                    Comparison::Diff => println!("≠ {e1} vs {e2}"),
+                    Comparison::Same => println!("= {vs}"),
+                    Comparison::Diff => println!("≠ {vs}"),
                 },
-                Err(e) => println!("⚠️ {e1} vs {e2}: {e}"),
+                Err(e) => println!("⚠️ {vs}: {e}"),
             };
             // TODO: cleaner...
             if e1.kind == PspEntryType::PspLevel2ADir as u8 {
