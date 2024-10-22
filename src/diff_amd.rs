@@ -33,30 +33,6 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
     }
 }
 
-fn get_psp_bin_header_info(e: &PspDirectoryEntry, data: &[u8]) -> String {
-    let v = if e.is_dir() {
-        "📁".to_string()
-    } else {
-        match e.data(data) {
-            Ok((h, b)) => {
-                if let Some(h) = h {
-                    let v = h.version;
-                    let m = h.maybe_magic;
-                    let s = h.sig;
-                    format!("{s} {m} {v}")
-                } else if e.is_sig_key() {
-                    let k = u16::from_be_bytes([b[4], b[5]]);
-                    format!("🔑 {k:04x}")
-                } else {
-                    "🚫".to_string()
-                }
-            }
-            _ => "🚫".to_string(),
-        }
-    };
-    format!("{v:23}")
-}
-
 // Level A sample
 // 00299000: 12d4 7558 ffff ffff 0200 0000 00ff ffff  ..uX............
 // 00299010: 0010 0200 0009 0dbc ffff ffff ffff ffff  ................
@@ -67,8 +43,8 @@ fn get_psp_bin_header_info(e: &PspDirectoryEntry, data: &[u8]) -> String {
 fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, data: &[u8]) {
     for e in dir {
         let k = PspEntryType::try_from(e.kind);
-        let v = get_psp_bin_header_info(e, data);
-        println!("- {e}{v}");
+        let v = e.display(data);
+        println!("- {v}");
         match k {
             Ok(PspEntryType::PspLevel2Dir) => {
                 let b = MAPPING_MASK & e.value as usize;
@@ -232,9 +208,9 @@ fn diff_psp_dirs(
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
-            let v1 = get_psp_bin_header_info(e1, data1);
-            let v2 = get_psp_bin_header_info(e2, data2);
-            let vs = format!("{e1}{v1} vs {e2}{v2}");
+            let v1 = e1.display(data1);
+            let v2 = e2.display(data2);
+            let vs = format!("{v1} vs {v2}");
             match diff_psp_entry(e1, e2, data1, data2, verbose) {
                 Ok(r) => match r {
                     Comparison::Same => println!("= {vs}"),

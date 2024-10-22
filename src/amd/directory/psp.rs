@@ -120,6 +120,15 @@ pub struct PspBinaryHeader {
     pub _rest: [u8; 128],
 }
 
+impl Display for PspBinaryHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = self.sig;
+        let m = self.maybe_magic;
+        let v = self.version;
+        write!(f, "{s} {m} {v}")
+    }
+}
+
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct PspDirectoryEntry {
@@ -281,6 +290,27 @@ impl PspDirectoryEntry {
             }
         };
         Ok(res)
+    }
+
+    pub fn display(&self, data: &[u8]) -> String {
+        let v = if self.is_dir() {
+            "📁".to_string()
+        } else {
+            match self.data(data) {
+                Ok((h, b)) => {
+                    if let Some(h) = h {
+                        format!("{h}")
+                    } else if self.is_sig_key() {
+                        let k = u16::from_be_bytes([b[4], b[5]]);
+                        format!("🔑 {k:04x}")
+                    } else {
+                        "🚫".to_string()
+                    }
+                }
+                _ => "🚫".to_string(),
+            }
+        };
+        format!("{self}{v:23}")
     }
 
     // TODO: extend list of headerless / special entries
