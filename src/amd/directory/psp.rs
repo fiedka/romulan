@@ -71,16 +71,36 @@ impl Display for Magic {
 /// coreboot util/amdfwtool/amdfwtool.h, 0x100 size header
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
 #[repr(C)]
+pub struct PspBinarySignature {
+    // 1 if the image is signed, 0 otherwise
+    pub opt: u32,
+    pub id: u32,
+    pub param: [u8; 16],
+}
+
+impl Display for PspBinarySignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let sig_short = if self.opt == 1 {
+            let b = [self.param[0], self.param[1]];
+            let n = u16::from_be_bytes(b);
+            format!("{n:04x} 🔐")
+        } else {
+            "🔓".to_string()
+        };
+        write!(f, "{sig_short:6}")
+    }
+}
+
+/// coreboot util/amdfwtool/amdfwtool.h, 0x100 size header
+#[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
+#[repr(C)]
 pub struct PspBinaryHeader {
     pub _00: [u8; 16],
     pub maybe_magic: Magic,
     pub fw_size_signed: u32,
     pub _10: [u8; 8],
     pub _18: [u8; 16],
-    // 1 if the image is signed, 0 otherwise
-    pub sig_opt: u32,
-    pub sid_id: u32,
-    pub sig_param: [u8; 16],
+    pub sig: PspBinarySignature,
     pub comp_opt: u32,
     pub _4c: [u8; 4],
     pub uncomp_size: u32,
@@ -203,7 +223,7 @@ impl Display for PspDirectoryEntry {
         } else {
             format!("{:08x} @ {:08x}", self.size, self.value)
         };
-        write!(f, "{kind:02x}.{sub:02x} {desc:52} {v:20}",)
+        write!(f, "{kind:02x}.{sub:02x} {desc:51} {v:20}",)
     }
 }
 
@@ -268,6 +288,35 @@ impl PspDirectoryEntry {
             let r = format!("{start:08x}:{end:08x}");
             Err(format!("{self} invalid: {r} exceedis size {len:08x}"))
         }
+    }
+
+    pub fn is_key(&self) -> bool {
+        let k = PspEntryType::try_from(self.kind);
+        matches!(
+            k,
+            Ok(PspEntryType::AmdPublicKey
+                | PspEntryType::AmdSecureDebugKey
+                | PspEntryType::OemPublicKey
+                | PspEntryType::PspTrustletPublicKey
+                | PspEntryType::WrappedIKEK
+                | PspEntryType::PspTokenUnlock
+                | PspEntryType::DxioPhySramFirmwarePublicKey
+                | PspEntryType::PmuPublicKey
+                | PspEntryType::PspBootLoaderPublicKeysTable
+                | PspEntryType::PspTrustedOSPublicKeysTable)
+        )
+    }
+
+    pub fn is_sig_key(&self) -> bool {
+        let k = PspEntryType::try_from(self.kind);
+        matches!(
+            k,
+            Ok(PspEntryType::AmdPublicKey
+                | PspEntryType::OemPublicKey
+                | PspEntryType::PspTrustletPublicKey
+                | PspEntryType::DxioPhySramFirmwarePublicKey
+                | PspEntryType::PmuPublicKey)
+        )
     }
 
     // https://doc.coreboot.org/soc/amd/psp_integration.html#psp-directory-table-entries
