@@ -293,6 +293,11 @@ impl PspDirectoryEntry {
     }
 
     pub fn display(&self, data: &[u8]) -> String {
+        if self.kind == PspEntryType::SoftFuseChain as u8 {
+            // TODO
+            let v = "🚫".to_string();
+            return format!("{self} {v:10}");
+        }
         let v = if self.is_dir() {
             "📁".to_string()
         } else {

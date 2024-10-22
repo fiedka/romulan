@@ -210,13 +210,15 @@ fn diff_psp_dirs(
         for (e1, e2) in common.iter() {
             let v1 = e1.display(data1);
             let v2 = e2.display(data2);
-            let vs = format!("{v1} vs {v2}");
             match diff_psp_entry(e1, e2, data1, data2, verbose) {
                 Ok(r) => match r {
-                    Comparison::Same => println!("= {vs}"),
-                    Comparison::Diff => println!("≠ {vs}"),
+                    Comparison::Same => println!("{v1} 🟰 {v2}"),
+                    Comparison::Diff => println!("{v1} ❌ {v2}"),
                 },
-                Err(e) => println!("⚠️ {vs}: {e}"),
+                Err(e) => {
+                    println!("{v1} ⚠️ {v2}");
+                    println!("   {e}");
+                }
             };
             // TODO: cleaner...
             if e1.kind == PspEntryType::PspLevel2ADir as u8 {
