@@ -34,23 +34,27 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
 }
 
 fn get_psp_bin_header_info(e: &PspDirectoryEntry, data: &[u8]) -> String {
-    let v = match e.data(data) {
-        Ok((h, b)) => {
-            if let Some(h) = h {
-                let v = h.version;
-                let m = h.maybe_magic;
-                let s = h.sig;
-                format!("{m} {v} {s}")
-            } else if e.is_sig_key() {
-                let k = u16::from_be_bytes([b[4], b[5]]);
-                format!("🔑  {k:04x}")
-            } else {
-                "🚫".to_string()
+    let v = if e.is_dir() {
+        "📁".to_string()
+    } else {
+        match e.data(data) {
+            Ok((h, b)) => {
+                if let Some(h) = h {
+                    let v = h.version;
+                    let m = h.maybe_magic;
+                    let s = h.sig;
+                    format!("{s} {m} {v}")
+                } else if e.is_sig_key() {
+                    let k = u16::from_be_bytes([b[4], b[5]]);
+                    format!("🔑 {k:04x}")
+                } else {
+                    "🚫".to_string()
+                }
             }
+            _ => "🚫".to_string(),
         }
-        _ => "🚫".to_string(),
     };
-    format!("{v:24}")
+    format!("{v:23}")
 }
 
 // Level A sample

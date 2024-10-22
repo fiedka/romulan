@@ -83,7 +83,7 @@ impl Display for PspBinarySignature {
         let sig_short = if self.opt == 1 {
             let b = [self.param[0], self.param[1]];
             let n = u16::from_be_bytes(b);
-            format!("{n:04x} 🔐")
+            format!("🔐 {n:04x}")
         } else {
             "🔓".to_string()
         };
@@ -219,7 +219,7 @@ impl Display for PspDirectoryEntry {
             // set-bit=$(call int-shift-left, 1 $(call _toint,$1))
             // PSP_SOFTFUSE=$(shell A=$(call int-add, \
             // $(foreach bit,$(sort $(PSP_SOFTFUSE_BITS)),$(call set-bit,$(bit)))); printf "0x%x" $$A)
-            format!("0x{:08x}", self.value)
+            format!("{:032b}", self.value)
         } else {
             format!("{:08x} @ {:08x}", self.size, self.value)
         };
@@ -309,6 +309,15 @@ impl PspDirectoryEntry {
         )
     }
 
+    pub fn is_dir(&self) -> bool {
+        let k = PspEntryType::try_from(self.kind);
+        matches!(
+            k,
+            Ok(PspEntryType::PspLevel2Dir
+                | PspEntryType::PspLevel2ADir
+                | PspEntryType::PspLevel2BDir)
+        )
+    }
     pub fn is_key(&self) -> bool {
         let k = PspEntryType::try_from(self.kind);
         matches!(
