@@ -212,11 +212,11 @@ fn diff_psp_dirs(
             let v2 = e2.display(data2);
             match diff_psp_entry(e1, e2, data1, data2, verbose) {
                 Ok(r) => match r {
-                    Comparison::Same => println!("{v1} 🟰 {v2}"),
-                    Comparison::Diff => println!("{v1} ❌ {v2}"),
+                    Comparison::Same => println!("{v1}  🟰  {v2}"),
+                    Comparison::Diff => println!("{v1}  ❌  {v2}"),
                 },
                 Err(e) => {
-                    println!("{v1} ⚠️ {v2}");
+                    println!("{v1}  ⚠️  {v2}");
                     println!("   {e}");
                 }
             };
