@@ -232,11 +232,13 @@ const PSP_BIN_HEADER_SIZE: usize = core::mem::size_of::<PspBinaryHeader>();
 impl PspDirectoryEntry {
     pub fn data(&self, data: &[u8]) -> Result<(Option<PspBinaryHeader>, Box<[u8]>), String> {
         let value = (self.value as usize) & ADDR_MASK;
+        // So far, this only holds for the Soft Fuse Chain.
         if self.size == 0xFFFF_FFFF {
             let body = value.to_le_bytes().to_vec().into_boxed_slice();
             return Ok((None, body));
         }
 
+        // TODO: Handle other addressing modes.
         let start = match self.addr_mode() {
             AddrMode::PhysAddr => value & MAPPING_MASK,
             AddrMode::FlashOffset => value,
@@ -245,49 +247,66 @@ impl PspDirectoryEntry {
 
         let end = start + self.size as usize;
         let len = data.len();
-        if end <= len {
-            let k = PspEntryType::try_from(self.kind);
-            Ok(match k {
-                // TODO: extend list of headerless / special entries
-                Ok(
-                    PspEntryType::AmdPublicKey
-                    | PspEntryType::PspNonVolatileData
-                    | PspEntryType::AmdSecureDebugKey
-                    | PspEntryType::OemPublicKey
-                    | PspEntryType::PspTrustletPublicKey
-                    | PspEntryType::WrappedIKEK
-                    | PspEntryType::PspTokenUnlock
-                    | PspEntryType::PspLevel2Dir
-                    | PspEntryType::PspLevel2ADir
-                    | PspEntryType::PspLevel2BDir
-                    | PspEntryType::DxioPhySramFirmwarePublicKey
-                    | PspEntryType::UsbPhyFirmware
-                    | PspEntryType::PmuPublicKey
-                    | PspEntryType::PspBootLoaderPublicKeysTable
-                    | PspEntryType::PspTrustedOSPublicKeysTable
-                    | PspEntryType::PspRpmcNvram
-                    | PspEntryType::DmcuEram
-                    | PspEntryType::DmcuIsr,
-                ) => {
-                    let body = data[start..end].to_vec().into_boxed_slice();
-                    (None, body)
-                }
-                _ => {
-                    let s = start + PSP_BIN_HEADER_SIZE;
-                    if s < end {
-                        let h = PspBinaryHeader::read_from_prefix(&data[start..]);
-                        let body = data[s..end].to_vec().into_boxed_slice();
-                        (h, body)
-                    } else {
+        // This should not, but may, occur.
+        if end > len {
+            let r = format!("{start:08x}:{end:08x}");
+            return Err(format!("{self} invalid: {r} exceedis size {len:08x}"));
+        }
+
+        // Not all entries have the generic header, so bail out immediately.
+        // We have a growing list of exceptions. This may be inaccurate.
+        // TODO: In some cases, it differs across revisions/families.
+        let res = if self.has_no_generic_header() {
+            let body = data[start..end].to_vec().into_boxed_slice();
+            (None, body)
+        } else {
+            let body_start = start + PSP_BIN_HEADER_SIZE;
+            // NOTE: It may happen that an entry is not in the list of known
+            // exceptions and there is not enough data for a header.
+            if body_start > end {
+                let body = data[start..end].to_vec().into_boxed_slice();
+                (None, body)
+            } else {
+                // Best effort: Assume the start to be a generic header.
+                match PspBinaryHeader::read_from_prefix(&data[start..]) {
+                    Some(h) => {
+                        let body = data[body_start..end].to_vec().into_boxed_slice();
+                        (Some(h), body)
+                    }
+                    None => {
                         let body = data[start..end].to_vec().into_boxed_slice();
                         (None, body)
                     }
                 }
-            })
-        } else {
-            let r = format!("{start:08x}:{end:08x}");
-            Err(format!("{self} invalid: {r} exceedis size {len:08x}"))
-        }
+            }
+        };
+        Ok(res)
+    }
+
+    // TODO: extend list of headerless / special entries
+    pub fn has_no_generic_header(&self) -> bool {
+        let k = PspEntryType::try_from(self.kind);
+        matches!(
+            k,
+            Ok(PspEntryType::AmdPublicKey
+                | PspEntryType::PspNonVolatileData
+                | PspEntryType::AmdSecureDebugKey
+                | PspEntryType::OemPublicKey
+                | PspEntryType::PspTrustletPublicKey
+                | PspEntryType::WrappedIKEK
+                | PspEntryType::PspTokenUnlock
+                | PspEntryType::PspLevel2Dir
+                | PspEntryType::PspLevel2ADir
+                | PspEntryType::PspLevel2BDir
+                | PspEntryType::DxioPhySramFirmwarePublicKey
+                | PspEntryType::UsbPhyFirmware
+                | PspEntryType::PmuPublicKey
+                | PspEntryType::PspBootLoaderPublicKeysTable
+                | PspEntryType::PspTrustedOSPublicKeysTable
+                | PspEntryType::PspRpmcNvram
+                | PspEntryType::DmcuEram
+                | PspEntryType::DmcuIsr,)
+        )
     }
 
     pub fn is_key(&self) -> bool {
