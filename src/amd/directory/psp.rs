@@ -156,7 +156,7 @@ pub enum AddrMode {
 }
 
 // FIXME: mask per SoC generation
-const MAPPING_MASK: usize = 0x00ff_ffff;
+pub const MAPPING_MASK: usize = 0x00ff_ffff;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[repr(u8)]
@@ -175,6 +175,7 @@ pub enum PspEntryType {
     DxioPhySramFirmwarePublicKey = 0x43,
     UsbPhyFirmware = 0x44,
     PspLevel2ADir = 0x48,
+    BiosLevel2Dir = 0x49,
     PspLevel2BDir = 0x4a,
     PmuPublicKey = 0x4e,
     PspBootLoaderPublicKeysTable = 0x50,
@@ -184,7 +185,8 @@ pub enum PspEntryType {
     DmcuIsr = 0x59,
 }
 
-// FIXME: This dulpication is very tedious and prone to error.
+// FIXME: This duplication is very tedious and prone to error.
+// It is too easy to forget to add something here that was added to the enum.
 impl TryFrom<u8> for PspEntryType {
     type Error = &'static str;
 
@@ -204,6 +206,7 @@ impl TryFrom<u8> for PspEntryType {
             0x43 => Ok(PspEntryType::DxioPhySramFirmwarePublicKey),
             0x44 => Ok(PspEntryType::UsbPhyFirmware),
             0x48 => Ok(PspEntryType::PspLevel2ADir),
+            0x49 => Ok(PspEntryType::BiosLevel2Dir),
             0x4a => Ok(PspEntryType::PspLevel2BDir),
             0x4e => Ok(PspEntryType::PmuPublicKey),
             0x50 => Ok(PspEntryType::PspBootLoaderPublicKeysTable),
@@ -239,7 +242,11 @@ impl Display for PspDirectoryEntry {
 const PSP_BIN_HEADER_SIZE: usize = core::mem::size_of::<PspBinaryHeader>();
 
 impl PspDirectoryEntry {
-    pub fn data(&self, data: &[u8]) -> Result<(Option<PspBinaryHeader>, Box<[u8]>), String> {
+    pub fn data(
+        &self,
+        data: &[u8],
+        offset: u32,
+    ) -> Result<(Option<PspBinaryHeader>, Box<[u8]>), String> {
         let value = (self.value as usize) & ADDR_MASK;
         // So far, this only holds for the Soft Fuse Chain.
         if self.size == 0xFFFF_FFFF {
@@ -247,13 +254,7 @@ impl PspDirectoryEntry {
             return Ok((None, body));
         }
 
-        // TODO: Handle other addressing modes.
-        let start = match self.addr_mode() {
-            AddrMode::PhysAddr => value & MAPPING_MASK,
-            AddrMode::FlashOffset => value,
-            _ => value,
-        };
-
+        let start = self.addr(offset);
         let end = start + self.size as usize;
         let len = data.len();
         // This should not, but may, occur.
@@ -292,7 +293,18 @@ impl PspDirectoryEntry {
         Ok(res)
     }
 
-    pub fn display(&self, data: &[u8]) -> String {
+    pub fn addr(&self, offset: u32) -> usize {
+        let v = self.value as usize;
+        match self.addr_mode() {
+            AddrMode::PhysAddr => v & MAPPING_MASK,
+            AddrMode::FlashOffset => v, // TODO: is this correect?!
+            AddrMode::DirHeaderOffset => offset as usize + (v & MAPPING_MASK),
+            // TODO: PartitionOffset
+            _ => v,
+        }
+    }
+
+    pub fn display(&self, data: &[u8], dir_offset: u32) -> String {
         if self.kind == PspEntryType::SoftFuseChain as u8 {
             // TODO
             let v = "";
@@ -301,7 +313,7 @@ impl PspDirectoryEntry {
         let v = if self.is_dir() {
             "📁".to_string()
         } else {
-            match self.data(data) {
+            match self.data(data, dir_offset) {
                 Ok((h, b)) => {
                     if let Some(h) = h {
                         format!("{h}")
