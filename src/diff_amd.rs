@@ -25,8 +25,8 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
     for d in &dir.entries {
         let base = MAPPING_MASK & d.directory as usize;
         println!("dir @ {base:08x} {d}");
-        let dir = PspDirectory::new(&data[base..]).unwrap();
-        print_psp_dir(&dir.entries, base as u32, data);
+        let dir = PspDirectory::new(&data[base..], base).unwrap();
+        print_psp_dir(&dir.entries, base, data);
         println!();
     }
 }
@@ -40,7 +40,7 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
 // 0029a010: 00c0 1500 0009 0dbc ffff ffff ffff ffff  ................
 // NOTE: addr is the address of the directory, needed for entries relative to
 // the directory locaiton.
-fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, addr: u32, data: &[u8]) {
+fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, addr: usize, data: &[u8]) {
     for e in dir {
         let k = PspEntryType::try_from(e.kind);
         let v = e.display(data, addr);
@@ -50,7 +50,7 @@ fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, addr: u32, data: &[u8]) {
                 println!();
                 let b = e.addr(addr);
                 println!("> BIOS recovery directory @ {b:08x}");
-                match Directory::new(&data[b..]) {
+                match Directory::new(&data[b..], b) {
                     Ok(d) => print_bios_dir(&d, data),
                     Err(e) => println!("{e} @ {b:08x}"),
                 }
@@ -58,10 +58,10 @@ fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, addr: u32, data: &[u8]) {
             Ok(PspEntryType::PspLevel2Dir) => {
                 let b = MAPPING_MASK & e.value as usize;
                 println!();
-                match PspDirectory::new(&data[b..]) {
+                match PspDirectory::new(&data[b..], b) {
                     Ok(d) => {
                         println!("| {d}");
-                        print_psp_dir(&d.entries, b as u32, data);
+                        print_psp_dir(&d.entries, b, data);
                     }
                     Err(e) => {
                         println!("Cannot parse level 2 directory @ {b:08x}: {e}");
@@ -74,10 +74,10 @@ fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, addr: u32, data: &[u8]) {
                 // TODO: handle error
                 let bd = PspBackupDir::new(&data[b..]).unwrap();
                 let a = bd.addr as usize;
-                let d = PspDirectory::new(&data[a..]).unwrap();
+                let d = PspDirectory::new(&data[a..], a).unwrap();
                 println!();
                 println!("| {d} @ {:08x}", a);
-                print_psp_dir(&d.entries, a as u32, data);
+                print_psp_dir(&d.entries, a, data);
                 println!();
             }
             Ok(PspEntryType::SoftFuseChain) => {}
@@ -86,14 +86,14 @@ fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, addr: u32, data: &[u8]) {
     }
 }
 
-pub fn print_psp_dirs(psp: &Directory, addr: u32, data: &[u8]) {
+pub fn print_psp_dirs(psp: &Directory, data: &[u8]) {
     match psp {
         Directory::PspCombo(d) => {
             print_psp_combo_dir(d, data);
         }
         Directory::Psp(d) => {
             println!("{d}");
-            print_psp_dir(&d.entries, addr, data);
+            print_psp_dir(&d.entries, d.addr, data);
         }
         _ => println!("Should not happen: not a PSP directory!"),
     }
@@ -131,7 +131,7 @@ fn print_bios_dir(dir: &Directory, data: &[u8]) {
 
 pub fn print_bios_dir_from_addr(base: usize, data: &[u8]) {
     let b = MAPPING_MASK & base;
-    match Directory::new(&data[b..]) {
+    match Directory::new(&data[b..], b) {
         Ok(Directory::Bios(d)) => {
             println!();
             println!("{b:08x}: BIOS Directory");
@@ -152,11 +152,12 @@ pub fn print_bios_dir_from_addr(base: usize, data: &[u8]) {
     }
 }
 
-// TODO: pass directory base addresses
 /* Diffing */
 fn diff_psp_entry(
     e1: &PspDirectoryEntry,
     e2: &PspDirectoryEntry,
+    dir_addr1: usize,
+    dir_addr2: usize,
     data1: &[u8],
     data2: &[u8],
     verbose: bool,
@@ -165,8 +166,8 @@ fn diff_psp_entry(
         println!("1: {e1:#08x?}");
         println!("2: {e2:#08x?}");
     }
-    match e1.data(data1, 0) {
-        Ok((_h1, d1)) => match e2.data(data2, 0) {
+    match e1.data(data1, dir_addr1) {
+        Ok((_h1, d1)) => match e2.data(data2, dir_addr2) {
             Ok((_h2, d2)) => {
                 if d1.eq(&d2) {
                     Ok(Comparison::Same)
@@ -219,10 +220,12 @@ fn diff_psp_dirs(
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
-            // FIXME: get directory offsets
-            let v1 = e1.display(data1, 0);
-            let v2 = e2.display(data2, 0);
-            match diff_psp_entry(e1, e2, data1, data2, verbose) {
+            // TODO: addressing mode!?
+            let a1 = dir1.addr & MAPPING_MASK;
+            let a2 = dir2.addr & MAPPING_MASK;
+            let v1 = e1.display(data1, a1);
+            let v2 = e2.display(data2, a2);
+            match diff_psp_entry(e1, e2, a1, a2, data1, data2, verbose) {
                 Ok(r) => match r {
                     Comparison::Same => println!("{v1}  🟰  {v2}"),
                     Comparison::Diff => println!("{v1}  ❌  {v2}"),
@@ -235,9 +238,9 @@ fn diff_psp_dirs(
             // TODO: cleaner...
             if e1.kind == PspEntryType::PspLevel2Dir as u8 {
                 let b1 = MAPPING_MASK & e1.value as usize;
-                let d1 = PspDirectory::new(&data1[b1..]).unwrap();
+                let d1 = PspDirectory::new(&data1[b1..], b1).unwrap();
                 let b2 = MAPPING_MASK & e2.value as usize;
-                let d2 = PspDirectory::new(&data2[b2..]).unwrap();
+                let d2 = PspDirectory::new(&data2[b2..], b2).unwrap();
                 println!("> SUB DIR");
                 diff_psp_dirs(&d1, &d2, data1, data2, verbose);
                 println!("< SUB DIR");
@@ -250,29 +253,33 @@ fn diff_psp_dirs(
                 // FIXME: handle error
                 let bd1 = PspBackupDir::new(&data1[b1..]).unwrap();
                 let a1 = bd1.addr as usize;
-                let d1 = PspDirectory::new(&data1[a1..]).unwrap();
+                let d1 = PspDirectory::new(&data1[a1..], a1).unwrap();
                 let b2 = MAPPING_MASK & e2.value as usize;
                 let bd2 = PspBackupDir::new(&data2[b2..]).unwrap();
                 let a2 = bd2.addr as usize;
-                let d2 = PspDirectory::new(&data2[a2..]).unwrap();
+                let d2 = PspDirectory::new(&data2[a2..], a2).unwrap();
                 println!("> SUB DIR");
                 diff_psp_dirs(&d1, &d2, data1, data2, verbose);
                 println!("< SUB DIR");
+            }
+            if e1.kind == PspEntryType::BiosLevel2Dir as u8 {
+                println!("    TODO: diff BIOS backup dirs");
+                print_bios_dir_from_addr(e1.addr(dir1.addr), data1);
+                print_bios_dir_from_addr(e2.addr(dir2.addr), data2);
             }
         }
         println!();
     }
 
-    // FIXME: get base addresses for each directory
     if !only_1.is_empty() {
         println!("entries only in 1:");
-        print_psp_dir(&only_1, 0, data1);
+        print_psp_dir(&only_1, dir1.addr, data1);
         println!();
     }
 
     if !only_2.is_empty() {
         println!("entries only in 2:");
-        print_psp_dir(&only_2, 0, data2);
+        print_psp_dir(&only_2, dir1.addr, data2);
         println!();
     }
 }
@@ -281,11 +288,10 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     let (psp1, data1) = p1;
     let (psp2, data2) = p2;
 
-    // FIXME: obtain base addresses of directories
     if *psp1 != *psp2 {
         println!("PSP 1 and 2 are of different kinds, won't diff");
-        print_psp_dirs(psp1, 0, data1);
-        print_psp_dirs(psp2, 0, data2);
+        print_psp_dirs(psp1, data1);
+        print_psp_dirs(psp2, data2);
         return;
     }
 
@@ -367,10 +373,10 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
         println!("> Combo dir {e1} vs {e2}");
         // TODO: handle error
         let b1 = MAPPING_MASK & e1.directory as usize;
-        let d1 = PspDirectory::new(&data1[b1..]).unwrap();
+        let d1 = PspDirectory::new(&data1[b1..], b1).unwrap();
 
         let b2 = MAPPING_MASK & e2.directory as usize;
-        let d2 = PspDirectory::new(&data2[b2..]).unwrap();
+        let d2 = PspDirectory::new(&data2[b2..], b2).unwrap();
 
         diff_psp_dirs(&d1, &d2, data1, data2, verbose);
     }
@@ -380,8 +386,8 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
         for e in only_1 {
             println!("> Combo dir {e}");
             let b = MAPPING_MASK & e.directory as usize;
-            let d = PspDirectory::new(&data1[b..]).unwrap();
-            print_psp_dir(&d.entries, b as u32, data1);
+            let d = PspDirectory::new(&data1[b..], b).unwrap();
+            print_psp_dir(&d.entries, b, data1);
         }
     }
     if !only_2.is_empty() {
@@ -389,8 +395,8 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
         for e in only_2 {
             println!("> Combo dir {e}");
             let b = MAPPING_MASK & e.directory as usize;
-            let d = PspDirectory::new(&data2[b..]).unwrap();
-            print_psp_dir(&d.entries, b as u32, data2);
+            let d = PspDirectory::new(&data2[b..], b).unwrap();
+            print_psp_dir(&d.entries, b, data2);
         }
     }
 }
@@ -405,8 +411,9 @@ pub fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
                 // FIXME: find a better interface
                 match psp1.get_psp_entries() {
                     Ok(dir) => {
-                        println!("# legacy PSP 1:");
-                        print_psp_dir(dir, rom2.efs().psp_legacy, rom1.data());
+                        let a = rom2.efs().psp_legacy as usize;
+                        println!("# legacy PSP 1 @ {a:08x}:");
+                        print_psp_dir(dir, a, rom1.data());
                     }
                     Err(e) => println!("# legacy PSP 1: {e}"),
                 }
@@ -418,8 +425,9 @@ pub fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
             match rom2.psp_legacy() {
                 Ok(psp2) => match psp2.get_psp_entries() {
                     Ok(dir) => {
-                        println!("# legacy PSP 2:");
-                        print_psp_dir(dir, rom2.efs().psp_legacy, rom2.data());
+                        let a = rom2.efs().psp_legacy as usize;
+                        println!("# legacy PSP 2 @ {a:08x}:");
+                        print_psp_dir(dir, a, rom2.data());
                     }
                     Err(e) => println!("# legacy PSP 2: {e}"),
                 },
@@ -437,7 +445,7 @@ pub fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
             }
             Err(e) => {
                 println!("# PSP 1:");
-                print_psp_dirs(&psp1, rom1.efs().psp_17_00, rom1.data());
+                print_psp_dirs(&psp1, rom1.data());
                 println!("# PSP 2: {e}");
             }
         },
@@ -446,7 +454,7 @@ pub fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
             match rom2.psp_17_00() {
                 Ok(psp2) => {
                     println!("# PSP 2:");
-                    print_psp_dirs(&psp2, rom2.efs().psp_17_00, rom2.data());
+                    print_psp_dirs(&psp2, rom2.data());
                 }
                 Err(e) => println!("# PSP 2: {e}"),
             }
@@ -519,8 +527,8 @@ pub fn diff_bios_simple_dir_entries(
             if e1.kind == BiosEntryType::BiosLevel2Dir as u8 {
                 let b1 = MAPPING_MASK & e1.source as usize;
                 let b2 = MAPPING_MASK & e2.source as usize;
-                let d1 = Directory::new(&data1[b1..]);
-                let d2 = Directory::new(&data2[b2..]);
+                let d1 = Directory::new(&data1[b1..], b1);
+                let d2 = Directory::new(&data2[b2..], b2);
                 println!("diffing level 2 directories:");
                 diff_bioses(&d1, &d2, data1, data2, verbose);
             } else {

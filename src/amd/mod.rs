@@ -27,7 +27,7 @@ fn get_dir(addr: usize, data: &[u8]) -> Result<directory::Directory, String> {
     if base == 0 || base == MAPPING_MASK {
         return Err(format!("0x{base:08x}: empty"));
     }
-    match directory::Directory::new(&data[base..]) {
+    match directory::Directory::new(&data[base..], base) {
         Ok(d) => Ok(d),
         Err(e) => Err(format!("0x{base:08x}: {e}")),
     }

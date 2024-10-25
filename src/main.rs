@@ -235,9 +235,9 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
         match rom.psp_legacy() {
             Ok(psp) => {
                 println!();
-                let b = efs.psp_legacy;
+                let b = efs.psp_legacy as usize;
                 println!("# legacy PSP {psp} @ {b:08x}");
-                print_psp_dirs(&psp, b, data);
+                print_psp_dirs(&psp, data);
             }
             Err(e) => {
                 println!();
@@ -247,9 +247,9 @@ fn print_amd(rom: &amd::Rom, print_json: bool) {
         match rom.psp_17_00() {
             Ok(psp) => {
                 println!();
-                let b = efs.psp_17_00;
+                let b = efs.psp_17_00 as usize;
                 println!("# Fam 17 PSP {psp} @ {b:08x}");
-                print_psp_dirs(&psp, b, data);
+                print_psp_dirs(&psp, data);
             }
             Err(e) => {
                 println!();

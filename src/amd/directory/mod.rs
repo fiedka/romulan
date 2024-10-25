@@ -41,14 +41,14 @@ impl Display for Directory {
 }
 
 impl<'a> Directory {
-    pub fn new(data: &'a [u8]) -> Result<Self, String> {
+    pub fn new(data: &'a [u8], addr: usize) -> Result<Self, String> {
         match &data[..4] {
             b"$BHD" => BiosDirectory::new(data).map(Self::Bios),
             b"2BHD" => BiosComboDirectory::new(data).map(Self::BiosCombo),
             b"$BL2" => BiosDirectory::new(data).map(Self::BiosLevel2),
-            b"$PSP" => PspDirectory::new(data).map(Self::Psp),
-            b"2PSP" => PspComboDirectory::new(data).map(Self::PspCombo),
-            b"$PL2" => PspDirectory::new(data).map(Self::PspLevel2),
+            b"$PSP" => PspDirectory::new(data, addr).map(Self::Psp),
+            b"2PSP" => PspComboDirectory::new(data, addr).map(Self::PspCombo),
+            b"$PL2" => PspDirectory::new(data, addr).map(Self::PspLevel2),
             unknown => Err(format!("unknown directory signature {:02x?}", unknown)),
         }
     }

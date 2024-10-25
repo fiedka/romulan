@@ -250,7 +250,7 @@ impl PspDirectoryEntry {
     pub fn data(
         &self,
         data: &[u8],
-        offset: u32,
+        offset: usize,
     ) -> Result<(Option<PspBinaryHeader>, Box<[u8]>), String> {
         let value = (self.value as usize) & ADDR_MASK;
         // So far, this only holds for the Soft Fuse Chain.
@@ -265,7 +265,7 @@ impl PspDirectoryEntry {
         // This should not, but may, occur.
         if end > len {
             let r = format!("{start:08x}:{end:08x}");
-            return Err(format!("{self} invalid: {r} exceedis size {len:08x}"));
+            return Err(format!("{self} invalid: {r} exceeds size {len:08x}"));
         }
 
         // Not all entries have the generic header, so bail out immediately.
@@ -298,18 +298,18 @@ impl PspDirectoryEntry {
         Ok(res)
     }
 
-    pub fn addr(&self, offset: u32) -> usize {
+    pub fn addr(&self, offset: usize) -> usize {
         let v = self.value as usize;
         match self.addr_mode() {
             AddrMode::PhysAddr => v & MAPPING_MASK,
-            AddrMode::FlashOffset => v, // TODO: is this correect?!
-            AddrMode::DirHeaderOffset => offset as usize + (v & MAPPING_MASK),
+            AddrMode::FlashOffset => v & MAPPING_MASK,
+            AddrMode::DirHeaderOffset => offset + (v & MAPPING_MASK),
             // TODO: PartitionOffset
             _ => v,
         }
     }
 
-    pub fn display(&self, data: &[u8], dir_offset: u32) -> String {
+    pub fn display(&self, data: &[u8], offset: usize) -> String {
         if self.kind == PspEntryType::SoftFuseChain as u8 {
             // TODO
             let v = "";
@@ -318,7 +318,7 @@ impl PspDirectoryEntry {
         let v = if self.is_dir() {
             "📁".to_string()
         } else {
-            match self.data(data, dir_offset) {
+            match self.data(data, offset) {
                 Ok((h, b)) => {
                     if let Some(h) = h {
                         format!("{h}")
@@ -547,6 +547,7 @@ impl<'a> PspBackupDir {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PspDirectory {
+    pub addr: usize,
     pub header: DirectoryHeader,
     pub entries: Vec<PspDirectoryEntry>,
 }
@@ -562,7 +563,7 @@ impl Display for PspDirectory {
 }
 
 impl<'a> PspDirectory {
-    pub fn new(data: &'a [u8]) -> Result<Self, String> {
+    pub fn new(data: &'a [u8], addr: usize) -> Result<Self, String> {
         let m = &data[..4];
         if m == b"$PSP" || m == b"$PL2" {
             let header =
@@ -576,6 +577,7 @@ impl<'a> PspDirectory {
             .ok_or("PSP directory entries invalid")?;
 
             return Ok(Self {
+                addr,
                 header,
                 entries: entries.to_vec(),
             });
@@ -588,12 +590,13 @@ impl<'a> PspDirectory {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct PspComboDirectory {
+    pub addr: usize,
     pub header: ComboDirectoryHeader,
     pub entries: Vec<ComboDirectoryEntry>,
 }
 
 impl<'a> PspComboDirectory {
-    pub fn new(data: &'a [u8]) -> Result<Self, String> {
+    pub fn new(data: &'a [u8], addr: usize) -> Result<Self, String> {
         if &data[..4] == b"2PSP" {
             let header =
                 ComboDirectoryHeader::read_from_prefix(data).ok_or("PSP combo header invalid")?;
@@ -606,6 +609,7 @@ impl<'a> PspComboDirectory {
             .ok_or("PSP combo entries invalid")?;
 
             return Ok(Self {
+                addr,
                 header,
                 entries: entries.to_vec(),
             });
