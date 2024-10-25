@@ -233,7 +233,12 @@ impl Display for PspDirectoryEntry {
             // $(foreach bit,$(sort $(PSP_SOFTFUSE_BITS)),$(call set-bit,$(bit)))); printf "0x%x" $$A)
             format!("{:032b}", self.value)
         } else {
-            format!("{:08x} @ {:08x}", self.size, self.value)
+            format!(
+                "{:08x} @ {:08x}",
+                self.size,
+                // TODO: use addressing mode
+                self.value as usize & MAPPING_MASK
+            )
         };
         write!(f, "{kind:02x}.{sub:02x} {desc:51} {v:20}",)
     }
