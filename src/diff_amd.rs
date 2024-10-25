@@ -263,9 +263,12 @@ fn diff_psp_dirs(
                 println!("< SUB DIR");
             }
             if e1.kind == PspEntryType::BiosLevel2Dir as u8 {
-                println!("    TODO: diff BIOS backup dirs");
-                print_bios_dir_from_addr(e1.addr(dir1.addr), data1);
-                print_bios_dir_from_addr(e2.addr(dir2.addr), data2);
+                println!();
+                let a1 = e1.addr(dir1.addr);
+                let a2 = e2.addr(dir2.addr);
+                let bd1 = Directory::new(&data1[a1..], a1);
+                let bd2 = Directory::new(&data2[a2..], a2);
+                diff_bioses(&bd1, &bd2, data1, data2, verbose);
             }
         }
         println!();
@@ -465,6 +468,8 @@ pub fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
 fn diff_bios_entry(
     e1: &BiosDirectoryEntry,
     e2: &BiosDirectoryEntry,
+    dir_addr1: usize,
+    dir_addr2: usize,
     data1: &[u8],
     data2: &[u8],
     verbose: bool,
@@ -473,8 +478,8 @@ fn diff_bios_entry(
         println!("1: {e1:#08x?}");
         println!("2: {e2:#08x?}");
     }
-    match e1.data(data1) {
-        Ok(d1) => match e2.data(data2) {
+    match e1.data(data1, dir_addr1) {
+        Ok(d1) => match e2.data(data2, dir_addr2) {
             Ok(d2) => {
                 if d1.eq(&d2) {
                     Ok(Comparison::Same)
@@ -532,7 +537,7 @@ pub fn diff_bios_simple_dir_entries(
                 println!("diffing level 2 directories:");
                 diff_bioses(&d1, &d2, data1, data2, verbose);
             } else {
-                match diff_bios_entry(e1, e2, data1, data2, verbose) {
+                match diff_bios_entry(e1, e2, dir1.addr, dir2.addr, data1, data2, verbose) {
                     Ok(r) => match r {
                         Comparison::Same => println!("{e1}  🟰  {e2}"),
                         Comparison::Diff => println!("{e1}  ❌  {e2}"),
@@ -568,8 +573,8 @@ pub fn diff_bios_simple_dirs(
     verbose: bool,
 ) {
     match dir1 {
-        Directory::Bios(d1) => match dir2 {
-            Directory::Bios(d2) => {
+        Directory::Bios(d1) | Directory::BiosLevel2(d1) => match dir2 {
+            Directory::Bios(d2) | Directory::BiosLevel2(d2) => {
                 let c1 = d1.header.checksum;
                 let c2 = d2.header.checksum;
                 println!("checksums {c1:08x} {c2:08x}");
@@ -578,6 +583,15 @@ pub fn diff_bios_simple_dirs(
             }
             _ => todo!(),
         },
+        Directory::BiosCombo(d1) => match dir2 {
+            Directory::BiosCombo(d2) => {
+                println!("TODO: diff BIOS combo dirs");
+                print_bios_dir_from_addr(d1.addr, data1);
+                print_bios_dir_from_addr(d2.addr, data2);
+            }
+            _ => todo!(),
+        },
+
         _ => todo!(),
     }
 }

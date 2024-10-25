@@ -6,7 +6,7 @@ use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes, LayoutVerified as LV};
 
-use super::{ComboDirectoryEntry, ComboDirectoryHeader, DirectoryHeader};
+use super::{AddrMode, ComboDirectoryEntry, ComboDirectoryHeader, DirectoryHeader};
 
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
 #[repr(C)]
@@ -146,14 +146,6 @@ pub struct PspDirectoryEntry {
 }
 
 const ADDR_MASK: usize = 0x3FFF_FFFF;
-
-#[derive(Debug)]
-pub enum AddrMode {
-    PhysAddr,
-    FlashOffset,
-    DirHeaderOffset,
-    PartitionOffset,
-}
 
 // FIXME: mask per SoC generation
 pub const MAPPING_MASK: usize = 0x00ff_ffff;

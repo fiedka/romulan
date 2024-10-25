@@ -5,7 +5,7 @@ use core::mem;
 use serde::{Deserialize, Serialize};
 use zerocopy::{AsBytes, FromBytes, LayoutVerified as LV};
 
-use super::{ComboDirectoryEntry, ComboDirectoryHeader, DirectoryHeader};
+use super::{AddrMode, ComboDirectoryEntry, ComboDirectoryHeader, DirectoryHeader};
 
 // From coreboot commit 30cf1551683810504f7823e42d4cb6515459cff8:
 // > In modern AMD systems, the PSP brings up DRAM then uncompresses the
@@ -23,7 +23,7 @@ pub struct BiosBinaryHeader {
     pub _0d: u32,
     pub _10: u32,
     pub size: u32, // the _uncompressed_ size
-    pub _rest: [u8; 112],
+    pub _rest: [u8; 232],
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -75,20 +75,35 @@ impl Display for BiosDirectoryEntry {
     }
 }
 
+const BIOS_HEADER_SIZE: usize = mem::size_of::<BiosBinaryHeader>();
+
+// https://en.wikipedia.org/wiki/List_of_file_signatures
+const ZLIB_DEFAULT_COMPRESSION_MAGIC: u16 = 0x789c;
+const ZLIB_BEST_COMPRESSION_MAGIC: u16 = 0x78da;
+
 // TODO: this was the original value - but it errors for some entries...
 // From my observsation, it never fits.
 // const BIOS_ENTRY_MASK: usize = 0x01FF_FFFF;
 const BIOS_ENTRY_MASK: usize = 0x00FF_FFFF;
 
 impl BiosDirectoryEntry {
-    pub fn data(&self, data: &[u8]) -> Result<Box<[u8]>, String> {
-        let m = BIOS_ENTRY_MASK;
-        let start = m & self.source as usize;
+    pub fn data(&self, data: &[u8], offset: usize) -> Result<Box<[u8]>, String> {
+        let start = self.addr(offset);
         let s = if self.kind == BiosEntryType::BiosBinary as u8 && self.is_compressed() {
-            // TODO: handle error
-            let bios_header = BiosBinaryHeader::read_from_prefix(&data[start..]).unwrap();
-            let size = bios_header.size as usize;
-            size + mem::size_of::<BiosBinaryHeader>()
+            let b = start + BIOS_HEADER_SIZE;
+            let d = [data[b], data[b + 1]];
+            let magic = u16::from_be_bytes(d);
+            // NOTE: The flag in the directory entry may be wrong. While this
+            // is not complete, a malformed header may cause other issues.
+            match magic {
+                ZLIB_DEFAULT_COMPRESSION_MAGIC | ZLIB_BEST_COMPRESSION_MAGIC => {
+                    match BiosBinaryHeader::read_from_prefix(&data[start..]) {
+                        Some(h) => h.size as usize + BIOS_HEADER_SIZE,
+                        None => return Err(format!("could not parse BIOS entry header @ {b:08x}")),
+                    }
+                }
+                _ => return Err(format!("no zlib magic @ {b:08x} ({magic:02x})")),
+            }
         } else {
             self.size as usize
         };
@@ -99,6 +114,27 @@ impl BiosDirectoryEntry {
         } else {
             let r = format!("{start:08x}:{end:08x}");
             Err(format!("{self} invalid: range {r} exceeds size {len:08x}"))
+        }
+    }
+
+    pub fn addr(&self, offset: usize) -> usize {
+        let v = self.source as usize;
+        match self.addr_mode() {
+            AddrMode::PhysAddr => v & BIOS_ENTRY_MASK,
+            AddrMode::FlashOffset => v & BIOS_ENTRY_MASK,
+            AddrMode::DirHeaderOffset => offset + (v & BIOS_ENTRY_MASK),
+            // TODO: PartitionOffset
+            _ => v,
+        }
+    }
+
+    pub fn addr_mode(&self) -> AddrMode {
+        match self.source >> 62 {
+            0 => AddrMode::PhysAddr,
+            1 => AddrMode::FlashOffset,
+            2 => AddrMode::DirHeaderOffset,
+            3 => AddrMode::PartitionOffset,
+            _ => unreachable!(),
         }
     }
 
@@ -149,12 +185,13 @@ impl BiosDirectoryEntry {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BiosDirectory {
+    pub addr: usize,
     pub header: DirectoryHeader,
     pub entries: Vec<BiosDirectoryEntry>,
 }
 
 impl<'a> BiosDirectory {
-    pub fn new(data: &'a [u8]) -> Result<Self, String> {
+    pub fn new(data: &'a [u8], addr: usize) -> Result<Self, String> {
         if &data[..4] == b"$BHD" || &data[..4] == b"$BL2" {
             let header =
                 DirectoryHeader::read_from_prefix(data).ok_or("BIOS directory header invalid")?;
@@ -167,6 +204,7 @@ impl<'a> BiosDirectory {
             .ok_or("BIOS directory entries invalid")?;
 
             return Ok(Self {
+                addr,
                 header,
                 entries: entries.to_vec(),
             });
@@ -188,12 +226,13 @@ impl<'a> BiosDirectory {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct BiosComboDirectory {
+    pub addr: usize,
     pub header: ComboDirectoryHeader,
     pub entries: Vec<ComboDirectoryEntry>,
 }
 
 impl<'a> BiosComboDirectory {
-    pub fn new(data: &'a [u8]) -> Result<Self, String> {
+    pub fn new(data: &'a [u8], addr: usize) -> Result<Self, String> {
         if &data[..4] == b"2BHD" {
             let header =
                 ComboDirectoryHeader::read_from_prefix(data).ok_or("BIOS combo header invalid")?;
@@ -205,6 +244,7 @@ impl<'a> BiosComboDirectory {
             .ok_or("BIOS combo entries invalid")?;
 
             return Ok(Self {
+                addr,
                 header,
                 entries: entries.to_vec(),
             });
