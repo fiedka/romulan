@@ -14,6 +14,9 @@ sources, including:
 - [Wikipedia](https://en.wikipedia.org/wiki/Table_of_AMD_processors)
 - [Wikichip](https://en.wikichip.org/wiki/amd)
 - [Mimoja's tools](https://github.com/Mimoja/amdfw)
+- [IOActive's writeup on AMD's Platform Secure Boot (PSB)](
+https://labs.ioactive.com/2024/02/exploring-amd-platform-secure-boot.html)
+  * their [Platbox tool](https://github.com/IOActive/Platbox/)
 
 For clarification, [AMD provides a short list of their own specific acronyms](
 https://www.amd.com/content/dam/amd/en/documents/resources/glossary-of-terms.pdf).
