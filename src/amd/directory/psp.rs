@@ -39,11 +39,13 @@ impl Display for Version {
 
 // NOTE: rustfmt always wants to put comments after the previuos line
 #[rustfmt::skip] 
-const KNOWN_MAGICS: [&str; 12] = [
+const KNOWN_MAGICS: [&str; 21] = [
     // seen for most binaries
     "$PS1",
     // alternative variants for AGESA binaries
     "0BAB", "0BAW",
+    // another variant
+    "AC0B", "AC1B", "AC2B", "AC3B", "AC4B", "AC5B", "AC6B", "AC7B", "AC8B",
     // typical for AGESA binaries, but not always
     "AW0B", "AW1B", "AW2B", "AW3B", "AW4B", "AW5B", "AW6B", "AW7B", "AW8B",
 ];
@@ -505,6 +507,7 @@ impl PspDirectoryEntry {
             0x90 => "FW MPCCX",
             0x91 => "FW GMI3 PHY",
             0x92 => "FW MPDMA PM",
+            0x93 => "FW RCFG 3328A",
             0x94 => "FW LSDMA",
             0x95 => "FW C20 MP",
             0x98 => "FW FCFG TABLE",
@@ -575,7 +578,7 @@ impl<'a> PspDirectory {
             });
         }
 
-        Err(format!("PSP directory header not found: {m:02x?}"))
+        Err(format!("PSP directory header not found @ {addr:08x}"))
     }
 }
 
@@ -607,7 +610,7 @@ impl<'a> PspComboDirectory {
             });
         }
 
-        Err(format!("PSP combo header not found"))
+        Err(format!("PSP combo header not found @ {addr:08x}"))
     }
 
     pub fn header(&self) -> ComboDirectoryHeader {
