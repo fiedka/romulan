@@ -83,7 +83,7 @@ const ZLIB_BEST_COMPRESSION_MAGIC: u16 = 0x78da;
 
 // TODO: this was the original value - but it errors for some entries...
 // From my observsation, it never fits.
-// const BIOS_ENTRY_MASK: usize = 0x01FF_FFFF;
+const BIOS_ENTRY_MASK2: usize = 0x01FF_FFFF;
 const BIOS_ENTRY_MASK: usize = 0x00FF_FFFF;
 
 impl BiosDirectoryEntry {
@@ -118,11 +118,16 @@ impl BiosDirectoryEntry {
     }
 
     pub fn addr(&self, offset: usize) -> usize {
+        let m = if self.kind == BiosEntryType::BiosBinary as u8 {
+            BIOS_ENTRY_MASK2
+        } else {
+            BIOS_ENTRY_MASK
+        };
         let v = self.source as usize;
         match self.addr_mode() {
-            AddrMode::PhysAddr => v & BIOS_ENTRY_MASK,
-            AddrMode::FlashOffset => v & BIOS_ENTRY_MASK,
-            AddrMode::DirHeaderOffset => offset + (v & BIOS_ENTRY_MASK),
+            AddrMode::PhysAddr => v & m,
+            AddrMode::FlashOffset => v & m,
+            AddrMode::DirHeaderOffset => offset + (v & m),
             // TODO: PartitionOffset
             _ => v,
         }
