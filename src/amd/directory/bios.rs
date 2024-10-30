@@ -177,7 +177,7 @@ impl BiosDirectoryEntry {
             0x67 => "Machine Check Exception Data",
             0x68 => "AGESA PSP Customization Block Backup",
             0x6A => "MP2 Firmware",
-            0x6D => "Maybe NVAR (seen in ASRock A520M-HVS)",
+            0x6D => "ROM Armor",
             0x70 => "BIOS Level 2 Directory",
             _ => "Unknown",
         }
