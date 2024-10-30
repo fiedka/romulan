@@ -119,10 +119,11 @@ impl BiosDirectoryEntry {
 
     pub fn addr(&self, offset: usize) -> usize {
         let v = self.source as usize;
+        let m = BIOS_ENTRY_MASK;
         match self.addr_mode() {
-            AddrMode::PhysAddr => v & BIOS_ENTRY_MASK,
-            AddrMode::FlashOffset => v & BIOS_ENTRY_MASK,
-            AddrMode::DirHeaderOffset => offset + (v & BIOS_ENTRY_MASK),
+            AddrMode::PhysAddr => v & m,
+            AddrMode::FlashOffset => v & m,
+            AddrMode::DirHeaderOffset => offset + (v & m),
             // TODO: PartitionOffset
             _ => v,
         }
