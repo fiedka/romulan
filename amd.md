@@ -34,6 +34,8 @@ family/model range.
 Note that given a firmware image, you likely have firmware for multiple
 processors/variants in it.
 
+![AMD flash partitioning](img/amd_flash_partitioning.png)
+
 ## PSP Firmware
 
 The EFS has two pointers for PSP firmware:
