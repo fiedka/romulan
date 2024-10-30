@@ -22,9 +22,10 @@ pub const BIOS_DIR_NAMES: [&str; 4] = [
 
 /* Printing */
 fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
+    println!("PSP Combo Directory @ {:08x}", dir.addr);
     for d in &dir.entries {
         let base = MAPPING_MASK & d.directory as usize;
-        println!("dir @ {base:08x} {d}");
+        println!("{d}");
         let dir = PspDirectory::new(&data[base..], base).unwrap();
         print_psp_dir(&dir.entries, base, data);
         println!();
@@ -41,6 +42,7 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
 // NOTE: addr is the address of the directory, needed for entries relative to
 // the directory locaiton.
 fn print_psp_dir(dir: &Vec<PspDirectoryEntry>, addr: usize, data: &[u8]) {
+    println!("PSP Directory @ {:08x}", addr);
     for e in dir {
         let k = PspEntryType::try_from(e.kind);
         let v = e.display(data, addr);
@@ -109,12 +111,19 @@ pub fn print_bios_simple_dir(dir: &Vec<BiosDirectoryEntry>, data: &[u8]) {
 }
 
 fn print_bios_combo_dir(dir: &BiosComboDirectory, data: &[u8]) {
+    println!(
+        "BIOS Combo Directory @ {:08x} checksum {:08x}, {} entries",
+        dir.addr, dir.header.checksum, dir.header.entries
+    );
     for entry in dir.entries() {
+        println!();
+        println!("{entry}");
         print_bios_dir_from_addr(entry.directory as usize, data);
     }
 }
 
 fn print_bios_level2_dir(dir: &BiosDirectory) {
+    println!("BIOS Level 2 Directory @ {:08x}", dir.addr);
     for entry in dir.entries() {
         println!("{entry}");
     }
@@ -133,18 +142,15 @@ pub fn print_bios_dir_from_addr(base: usize, data: &[u8]) {
     let b = MAPPING_MASK & base;
     match Directory::new(&data[b..], b) {
         Ok(Directory::Bios(d)) => {
-            println!();
-            println!("{b:08x}: BIOS Directory");
+            println!("BIOS Directory @ {b:08x}");
             print_bios_simple_dir(&d.entries, data);
         }
         Ok(Directory::BiosCombo(d)) => {
             println!();
-            println!("{b:08x}: BIOS Combo Directory");
             print_bios_combo_dir(&d, data);
         }
         Ok(Directory::BiosLevel2(d)) => {
             println!();
-            println!("{b:08x}: BIOS Level 2 Directory");
             print_bios_level2_dir(&d);
         }
         Err(e) => println!("{e}"),
