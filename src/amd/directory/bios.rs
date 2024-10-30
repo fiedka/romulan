@@ -250,7 +250,7 @@ impl<'a> BiosComboDirectory {
             });
         }
 
-        Err(format!("BIOS combo header not found"))
+        Err(format!("BIOS combo header not found @ {addr:08x}"))
     }
 
     pub fn header(&self) -> ComboDirectoryHeader {
