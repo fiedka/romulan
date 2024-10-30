@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2018"
 description = "Rust library for parsing a number of firmware images"
 license = "MIT"
-authors = ["Jeremy Soller <jackpot51@gmail.com>"]
+authors = ["Jeremy Soller <jackpot51@gmail.com>", "Daniel Maslowski <info@orangecms.org>"]
 repository = "https://github.com/system76/romulan"
 
 [dependencies]
