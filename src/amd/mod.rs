@@ -10,6 +10,8 @@ use zerocopy::LayoutVerified;
 pub mod directory;
 pub mod flash;
 
+use directory::Directory;
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Rom<'a> {
     data: &'a [u8],
@@ -21,13 +23,13 @@ const STEP_SIZE: usize = 0x1000;
 
 const MAPPING_MASK: usize = 0x00ff_ffff;
 
-fn get_dir(addr: usize, data: &[u8]) -> Result<directory::Directory, String> {
+fn get_dir(addr: usize, data: &[u8]) -> Result<Directory, String> {
     // TODO: Better deal with the mapping cleanly.
     let base = addr & MAPPING_MASK;
     if base == 0 || base == MAPPING_MASK {
         return Err(format!("0x{base:08x}: empty"));
     }
-    match directory::Directory::new(&data[base..], base) {
+    match Directory::new(&data[base..], base) {
         Ok(d) => Ok(d),
         Err(e) => Err(format!("0x{base:08x}: {e}")),
     }
@@ -70,27 +72,27 @@ impl<'a> Rom<'a> {
         self.efs
     }
 
-    pub fn psp_legacy(&self) -> Result<directory::Directory, String> {
+    pub fn psp_legacy(&self) -> Result<Directory, String> {
         get_dir(self.efs.psp_legacy as usize, self.data)
     }
 
-    pub fn psp_17_00(&self) -> Result<directory::Directory, String> {
+    pub fn psp_17_00(&self) -> Result<Directory, String> {
         get_dir(self.efs.psp_17_00 as usize, self.data)
     }
 
-    pub fn bios_17_00_0f(&self) -> Result<directory::Directory, String> {
+    pub fn bios_17_00_0f(&self) -> Result<Directory, String> {
         get_dir(self.efs.bios_17_00_0f as usize, self.data)
     }
 
-    pub fn bios_17_10_1f(&self) -> Result<directory::Directory, String> {
+    pub fn bios_17_10_1f(&self) -> Result<Directory, String> {
         get_dir(self.efs.bios_17_10_1f as usize, self.data)
     }
 
-    pub fn bios_17_30_3f_19_00_0f(&self) -> Result<directory::Directory, String> {
+    pub fn bios_17_30_3f_19_00_0f(&self) -> Result<Directory, String> {
         get_dir(self.efs.bios_17_30_3f_19_00_0f as usize, self.data)
     }
 
-    pub fn bios_17_60(&self) -> Result<directory::Directory, String> {
+    pub fn bios_17_60(&self) -> Result<Directory, String> {
         get_dir(self.efs.bios_17_60 as usize, self.data)
     }
 }
