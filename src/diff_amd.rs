@@ -105,6 +105,7 @@ pub fn print_bios_simple_dir(dir: &Vec<BiosDirectoryEntry>, data: &[u8]) {
     for entry in dir {
         println!("{entry}");
         if entry.kind == BiosEntryType::BiosLevel2Dir as u8 {
+            // FIXME: addr mode
             print_bios_dir_from_addr(entry.source as usize, data);
         }
     }
@@ -117,23 +118,22 @@ fn print_bios_combo_dir(dir: &BiosComboDirectory, data: &[u8]) {
     );
     for entry in dir.entries() {
         println!();
+        // FIXME: addr mode
         println!("{entry}");
         print_bios_dir_from_addr(entry.directory as usize, data);
     }
 }
 
-fn print_bios_level2_dir(dir: &BiosDirectory) {
+fn print_bios_level2_dir(dir: &BiosDirectory, data: &[u8]) {
     println!("BIOS Level 2 Directory @ {:08x}", dir.addr);
-    for entry in dir.entries() {
-        println!("{entry}");
-    }
+    print_bios_simple_dir(&dir.entries, data);
 }
 
 fn print_bios_dir(dir: &Directory, data: &[u8]) {
     match dir {
         Directory::Bios(d) => print_bios_simple_dir(&d.entries, data),
         Directory::BiosCombo(d) => print_bios_combo_dir(d, data),
-        Directory::BiosLevel2(d) => print_bios_level2_dir(d),
+        Directory::BiosLevel2(d) => print_bios_level2_dir(d, data),
         _ => println!("??"),
     }
 }
@@ -151,7 +151,7 @@ pub fn print_bios_dir_from_addr(base: usize, data: &[u8]) {
         }
         Ok(Directory::BiosLevel2(d)) => {
             println!();
-            print_bios_level2_dir(&d);
+            print_bios_level2_dir(&d, data);
         }
         Err(e) => println!("{e}"),
         _ => println!("??"),
@@ -535,24 +535,23 @@ pub fn diff_bios_simple_dir_entries(
     if !common.is_empty() {
         println!("common:");
         for (e1, e2) in common.iter() {
+            match diff_bios_entry(e1, e2, dir1.addr, dir2.addr, data1, data2, verbose) {
+                Ok(r) => match r {
+                    Comparison::Same => println!("{e1}  🟰  {e2}"),
+                    Comparison::Diff => println!("{e1}  ❌  {e2}"),
+                },
+                Err(e) => {
+                    println!("{e1}  ⚠️  {e2}");
+                    println!("   {e}");
+                }
+            }
             if e1.kind == BiosEntryType::BiosLevel2Dir as u8 {
                 let b1 = MAPPING_MASK & e1.source as usize;
                 let b2 = MAPPING_MASK & e2.source as usize;
+                println!("diffing level 2 directories:");
                 let d1 = Directory::new(&data1[b1..], b1);
                 let d2 = Directory::new(&data2[b2..], b2);
-                println!("diffing level 2 directories:");
                 diff_bioses(&d1, &d2, data1, data2, verbose);
-            } else {
-                match diff_bios_entry(e1, e2, dir1.addr, dir2.addr, data1, data2, verbose) {
-                    Ok(r) => match r {
-                        Comparison::Same => println!("{e1}  🟰  {e2}"),
-                        Comparison::Diff => println!("{e1}  ❌  {e2}"),
-                    },
-                    Err(e) => {
-                        println!("{e1}  ⚠️  {e2}");
-                        println!("   {e}");
-                    }
-                }
             }
         }
     }
@@ -592,6 +591,7 @@ pub fn diff_bios_simple_dirs(
         Directory::BiosCombo(d1) => match dir2 {
             Directory::BiosCombo(d2) => {
                 println!("TODO: diff BIOS combo dirs");
+                // FIXME: addr mode
                 print_bios_dir_from_addr(d1.addr, data1);
                 print_bios_dir_from_addr(d2.addr, data2);
             }
