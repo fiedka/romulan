@@ -49,7 +49,10 @@ impl<'a> Directory {
             b"$PSP" => PspDirectory::new(data, addr).map(Self::Psp),
             b"2PSP" => PspComboDirectory::new(data, addr).map(Self::PspCombo),
             b"$PL2" => PspDirectory::new(data, addr).map(Self::PspLevel2),
-            unknown => Err(format!("unknown directory signature {:02x?}", unknown)),
+            unknown => Err(format!(
+                "unknown directory signature {:02x?} @ {addr:08x}",
+                unknown
+            )),
         }
     }
 
