@@ -35,6 +35,17 @@ fn get_dir(addr: usize, data: &[u8]) -> Result<Directory, String> {
     }
 }
 
+// TODO: look at docs to see where each family maps the SPI flash
+// https://doc.coreboot.org/soc/amd/psp_integration.html
+const KNOWN_X86_PHYS_ADDRS: [usize; 6] = [
+    0xff020000, //
+    0xff820000, //
+    0xffc20000, //
+    0xffe20000, //
+    0xfff20000, //
+    0xfffa0000, //
+];
+
 impl<'a> Rom<'a> {
     pub fn new(data: &'a [u8]) -> Result<Rom, String> {
         let mut i = 0;
