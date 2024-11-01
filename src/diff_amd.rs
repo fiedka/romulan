@@ -586,7 +586,19 @@ pub fn diff_bios_simple_dirs(
 
                 diff_bios_simple_dir_entries(d1, d2, data1, data2, verbose);
             }
-            _ => todo!(),
+            Directory::BiosCombo(d2) => {
+                println!("1:");
+                print_bios_simple_dir(&d1.entries, data1);
+                println!();
+                println!("2:");
+                print_bios_combo_dir(d2, data2);
+            }
+            _ => {
+                println!("1:");
+                print_bios_simple_dir(&d1.entries, data1);
+                println!();
+                println!("2: not a BIOS directory");
+            }
         },
         Directory::BiosCombo(d1) => match dir2 {
             Directory::BiosCombo(d2) => {
@@ -595,7 +607,19 @@ pub fn diff_bios_simple_dirs(
                 print_bios_dir_from_addr(d1.addr, data1);
                 print_bios_dir_from_addr(d2.addr, data2);
             }
-            _ => todo!(),
+            Directory::Bios(d2) | Directory::BiosLevel2(d2) => {
+                println!("1:");
+                print_bios_combo_dir(d1, data1);
+                println!();
+                println!("2:");
+                print_bios_simple_dir(&d2.entries, data2);
+            }
+            _ => {
+                println!("1: not a BIOS directory");
+                println!();
+                println!("2:");
+                print_bios_combo_dir(d1, data1);
+            }
         },
 
         _ => todo!(),
