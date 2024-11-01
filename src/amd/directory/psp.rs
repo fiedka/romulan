@@ -11,10 +11,10 @@ use super::{AddrMode, ComboDirectoryEntry, ComboDirectoryHeader, DirectoryHeader
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Version {
-    rev: u8,
-    patch: u8,
-    minor: u8,
     major: u8,
+    minor: u8,
+    patch: u8,
+    rev: u8,
 }
 
 impl Display for Version {
