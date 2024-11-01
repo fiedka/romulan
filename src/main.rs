@@ -188,6 +188,7 @@ fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
         println!("  ME: {len} K");
         let v = me.version().unwrap_or("Unknown".to_string());
         println!("    Version: {v}");
+        /*
         let d = me.data();
         match me_fs_rs::parse(d) {
             Ok(fpt) => {
@@ -195,6 +196,7 @@ fn print_intel(rom: &intel::Rom, _print_json: bool, verbose: bool) {
             }
             Err(e) => println!("ME parser: {e}"),
         }
+        */
     } else {
         println!("  ME: None");
     }
