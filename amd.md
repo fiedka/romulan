@@ -16,6 +16,8 @@ sources, including:
 - [Mimoja's tools](https://github.com/Mimoja/amdfw)
 - [IOActive's writeup on AMD's Platform Secure Boot (PSB)](
 https://labs.ioactive.com/2024/02/exploring-amd-platform-secure-boot.html)
+  * their [earlier writeup on PSB and possible misconfigurations](
+https://labs.ioactive.com/2023/06/back-to-future-with-platform-security.html)
   * their [Platbox tool](https://github.com/IOActive/Platbox/)
 
 For clarification, [AMD provides a short list of their own specific acronyms](
@@ -90,3 +92,13 @@ The terms used are explained in the coreboot docs. Briefly:
 - ABL is AGESA bootloader
 - APCB is AMD PSP Customization Block
 - APOB is AMD PSP Ouput Buffer
+
+### Mapping
+
+TODO: 4 addressing/offset modes, what is the mapping/mask to use?
+
+strings found in ASRock A520M-HVS firmware `A52MIX_2.73`:
+```
+Normal 1:1 mapping case, BIOS DIR checking starts
+Special case, BIOS DIR checking starts
+```
