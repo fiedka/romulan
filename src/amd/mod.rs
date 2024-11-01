@@ -48,30 +48,29 @@ const KNOWN_X86_PHYS_ADDRS: [usize; 6] = [
 
 impl<'a> Rom<'a> {
     pub fn new(data: &'a [u8]) -> Result<Rom, String> {
-        let mut i = 0;
         // TODO: Can we just iterate over chunks? The last one may be too short.
         /*
         for block in data.chunks(0x1000) {
         }
         */
         // TODO: Handle errors?
-        while i + mem::size_of::<flash::EFS>() <= data.len() {
-            let first4 = &data[i..i + 4];
-            if first4.eq(MAGIC.as_bytes()) {
-                let lv: LayoutVerified<_, flash::EFS> =
-                    LayoutVerified::new_unaligned_from_prefix(&data[i..])
-                        .unwrap()
-                        .0;
-                return Ok(Rom {
-                    data,
-                    efs: *lv,
-                    // .map_err(|err| format!("EFS invalid: {:?}", err))?,
-                });
+        for o in KNOWN_X86_PHYS_ADDRS {
+            let o = o & 0x00ff_ffff;
+            if o + mem::size_of::<flash::EFS>() <= data.len() {
+                let first4 = &data[o..o + 4];
+                if first4.eq(MAGIC.as_bytes()) {
+                    let lv: LayoutVerified<_, flash::EFS> =
+                        LayoutVerified::new_unaligned_from_prefix(&data[o..])
+                            .unwrap()
+                            .0;
+                    return Ok(Rom {
+                        data,
+                        efs: *lv,
+                        // .map_err(|err| format!("EFS invalid: {:?}", err))?,
+                    });
+                }
             }
-
-            i += STEP_SIZE;
         }
-
         Err("Embedded Firmware Structure not found".to_string())
     }
 
