@@ -112,46 +112,50 @@ impl<'a> Directory {
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct DirectoryHeader {
-    /// 0x00: Magic of directory ("$BHD" or "$PSP")
+    /// "$BHD", "$BL2", "$PSP" or "$PL2"
     pub magic: u32,
-    /// 0x04: CRC of all directory data after this
+    /// Fletcher32 of all directory data after this
     pub checksum: u32,
-    /// 0x08: number of entries
+    /// number of entries
     pub entries: u32,
-    pub rsvd_0c: u32,
+    pub _0c: u32,
+}
+
+impl Display for DirectoryHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "directory has {} entries, checksum {:08x}",
+            self.checksum, self.entries
+        )
+    }
 }
 
 #[derive(AsBytes, FromBytes, Clone, Copy, Debug, Deserialize, Serialize)]
 #[repr(C)]
 pub struct ComboDirectoryHeader {
-    /// 0x00: Magic of directory ("2BHD" or "2PSP")
+    /// "2BHD" or "2PSP"
     pub magic: u32,
-    /// 0x04: CRC of all directory data after this
+    /// Fletcher32 of all directory data after this
     pub checksum: u32,
-    /// 0x08: number of entries
+    /// number of entries
     pub entries: u32,
-    /// 0x0c: 0 for dynamic look up through all entries,
-    ///       1 for PSP or chip ID match.
-    /// Only for PSP combo directory
+    /// Only for PSP combo directory:
+    /// - 0 for dynamic look up through all entries,
+    /// - 1 for PSP or chip ID match.
     pub look_up_mode: u32,
-    pub rsvd_10: u32,
-    pub rsvd_14: u32,
-    pub rsvd_18: u32,
-    pub rsvd_1c: u32,
+    pub _10: u32,
+    pub _14: u32,
+    pub _18: u32,
+    pub _1c: u32,
 }
 
 impl Display for ComboDirectoryHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "checksum {:08x}, {} entries, mode {}, {:08x}:{:08x}:{:08x}:{:08x}",
-            self.checksum,
-            self.entries,
-            self.look_up_mode,
-            self.rsvd_10,
-            self.rsvd_14,
-            self.rsvd_18,
-            self.rsvd_1c
+            "directory has {} entries, checksum {:08x}, mode {}",
+            self.entries, self.checksum, self.look_up_mode
         )
     }
 }

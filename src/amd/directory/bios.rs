@@ -30,6 +30,7 @@ pub struct BiosBinaryHeader {
 #[repr(u8)]
 pub enum BiosEntryType {
     BiosBinary = 0x62,
+    RomArmor = 0x6d,
     BiosLevel2Dir = 0x70,
 }
 
@@ -62,7 +63,7 @@ impl Display for BiosDirectoryEntry {
         let fl = self.flags;
 
         let size = self.size;
-        let src = self.source;
+        let src = 0x3fff_ffff_ffff_ffff & self.source;
         let d = self.destination;
         let dest = if d == 0xffff_ffff_ffff_ffff || d == 0x0000_0000_0000_0000 {
             String::from("")
@@ -83,7 +84,7 @@ const ZLIB_BEST_COMPRESSION_MAGIC: u16 = 0x78da;
 
 // TODO: this was the original value - but it errors for some entries...
 // From my observsation, it never fits.
-// const BIOS_ENTRY_MASK: usize = 0x01FF_FFFF;
+const BIOS_ENTRY_MASK2: usize = 0x01FF_FFFF;
 const BIOS_ENTRY_MASK: usize = 0x00FF_FFFF;
 
 impl BiosDirectoryEntry {
@@ -122,7 +123,7 @@ impl BiosDirectoryEntry {
         let m = BIOS_ENTRY_MASK;
         match self.addr_mode() {
             AddrMode::PhysAddr => v & m,
-            AddrMode::FlashOffset => v & m,
+            AddrMode::FlashOffset => v & BIOS_ENTRY_MASK2,
             AddrMode::DirHeaderOffset => offset + (v & m),
             // TODO: PartitionOffset
             _ => v,
@@ -163,6 +164,13 @@ impl BiosDirectoryEntry {
                 0x03 => "PMU Firmware Code (DDR4 LRDIMM 1D)",
                 0x04 => "PMU Firmware Code (DDR4 2D)",
                 0x05 => "PMU Firmware Code (DDR4 2D Diagnostic)",
+                0x06 => "PMU Firmware Code (known from coreboot)",
+                0x07 => "PMU Firmware Code (known from coreboot)",
+                0x09 => "PMU Firmware Code (known from coreboot)",
+                0x10 => "PMU Firmware Code (known from coreboot)",
+                0x11 => "PMU Firmware Code (known from coreboot)",
+                0x12 => "PMU Firmware Code (known from coreboot)",
+                0x13 => "PMU Firmware Code (known from coreboot)",
                 _ => "PMU Firmware Code (Unknown)",
             },
             0x65 => match self.instance() {
@@ -171,13 +179,29 @@ impl BiosDirectoryEntry {
                 0x03 => "PMU Firmware Data (DDR4 LRDIMM 1D)",
                 0x04 => "PMU Firmware Data (DDR4 2D)",
                 0x05 => "PMU Firmware Data (DDR4 2D Diagnostic)",
+                0x06 => "PMU Firmware Data (known from coreboot)",
+                0x07 => "PMU Firmware Data (known from coreboot)",
+                0x09 => "PMU Firmware Data (known from coreboot)",
+                0x10 => "PMU Firmware Data (known from coreboot)",
+                0x11 => "PMU Firmware Data (known from coreboot)",
+                0x12 => "PMU Firmware Data (known from coreboot)",
+                0x13 => "PMU Firmware Data (known from coreboot)",
                 _ => "PMU Firmware Data (Unknown)",
             },
-            0x66 => "Microcode",
+            0x66 => match self.instance() {
+                0x00 => "Microcode",
+                0x01 => "Microcode",
+                0x02 => "Microcode",
+                0x03 => "Microcode",
+                0x04 => "Microcode",
+                0x05 => "Microcode",
+                0x06 => "Microcode",
+                _ => "Microcode",
+            },
             0x67 => "Machine Check Exception Data",
             0x68 => "AGESA PSP Customization Block Backup",
             0x6A => "MP2 Firmware",
-            0x6D => "ROM Armor (NVAR)",
+            0x6D => "AMD BIOS NV Settings",
             0x70 => "BIOS Level 2 Directory",
             _ => "Unknown",
         }

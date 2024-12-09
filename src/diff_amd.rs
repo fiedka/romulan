@@ -6,8 +6,6 @@ use romulan::amd::directory::{
 use romulan::amd::flash::{get_real_addr, EFS};
 use romulan::amd::{self, directory::MAPPING_MASK};
 
-type PspAndData<'a> = (&'a Directory, &'a [u8]);
-
 pub enum Comparison {
     Diff,
     Same,
@@ -26,8 +24,8 @@ fn print_psp_combo_dir(dir: &PspComboDirectory, data: &[u8]) {
     for d in &dir.entries {
         let base = MAPPING_MASK & d.directory as usize;
         println!("{d}");
-        let dir = PspDirectory::new(&data[base..], base).unwrap();
-        print_psp_dir(&dir.entries, base, data);
+        let d = PspDirectory::new(&data[base..], base).unwrap();
+        print_psp_dir(&d.entries, base, data);
         println!();
     }
 }
@@ -187,7 +185,7 @@ fn diff_psp_entry(
     }
 }
 
-fn diff_psp_dirs(
+fn diff_psp_simple_dirs(
     dir1: &PspDirectory,
     dir2: &PspDirectory,
     data1: &[u8],
@@ -248,7 +246,7 @@ fn diff_psp_dirs(
                 let b2 = MAPPING_MASK & e2.value as usize;
                 let d2 = PspDirectory::new(&data2[b2..], b2).unwrap();
                 println!("> SUB DIR");
-                diff_psp_dirs(&d1, &d2, data1, data2, verbose);
+                diff_psp_simple_dirs(&d1, &d2, data1, data2, verbose);
                 println!("< SUB DIR");
             }
             if e1.kind == PspEntryType::PspLevel2ADir as u8
@@ -265,7 +263,7 @@ fn diff_psp_dirs(
                 let a2 = bd2.addr as usize;
                 let d2 = PspDirectory::new(&data2[a2..], a2).unwrap();
                 println!("> SUB DIR");
-                diff_psp_dirs(&d1, &d2, data1, data2, verbose);
+                diff_psp_simple_dirs(&d1, &d2, data1, data2, verbose);
                 println!("< SUB DIR");
             }
             if e1.kind == PspEntryType::BiosLevel2Dir as u8 {
@@ -293,68 +291,21 @@ fn diff_psp_dirs(
     }
 }
 
-fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
-    let (psp1, data1) = p1;
-    let (psp2, data2) = p2;
-
-    if *psp1 != *psp2 {
-        println!("PSP 1 and 2 are of different kinds, won't diff");
-        print_psp_dirs(psp1, data1);
-        print_psp_dirs(psp2, data2);
-        return;
-    }
-
-    // FIXME: find a better interface?
-    match psp1 {
-        Directory::PspCombo(_) => {
-            // TODO: check other dir here and factor out diff_psp_combo_dirs
-        }
-        Directory::Psp(d1) => match psp2 {
-            Directory::Psp(d2) => {
-                diff_psp_dirs(d1, d2, data1, data2, verbose);
-                return;
-            }
-            // NOTE: We checked above that psp1 and psp2 are of the same kind.
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    }
-
-    let es1 = psp1.get_combo_entries().unwrap();
-    let es2 = psp2.get_combo_entries().unwrap();
-
+fn diff_psp_combo_dirs(
+    dir1: &PspComboDirectory,
+    dir2: &PspComboDirectory,
+    data1: &[u8],
+    data2: &[u8],
+    verbose: bool,
+) {
+    let es1 = &dir1.entries;
+    let es2 = &dir2.entries;
     let l1 = es1.len();
     let l2 = es2.len();
-
-    let c1 = psp1.get_checksum();
-    let c2 = psp2.get_checksum();
-
-    let cs = if c1 != c2 {
-        format!("differ: {c1:04x} {c2:04x}")
-    } else {
-        "equal".to_string()
-    };
-
     if l1 != l2 {
-        println!("{psp1} vs {psp2}: different number of entries: {l1} vs {l2}");
-        println!();
-    } else {
-        println!("Comparing {psp1} vs {psp2}, {l1} entries each, checksums {cs}");
-        println!();
+        println!("  different number of entries: {l1} vs {l2}");
     }
-
-    if false {
-        match psp1.get_combo_header() {
-            Ok(h) => println!("{h}"),
-            Err(e) => println!("{e}"),
-        }
-        println!();
-        match psp2.get_combo_header() {
-            Ok(h) => println!("{h}"),
-            Err(e) => println!("{e}"),
-        }
-        println!();
-    }
+    println!();
 
     let mut common = Vec::<(ComboDirectoryEntry, ComboDirectoryEntry)>::new();
     let mut only_1 = Vec::<ComboDirectoryEntry>::new();
@@ -379,7 +330,7 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     }
 
     for (e1, e2) in common {
-        println!("> Combo dir {e1} vs {e2}");
+        println!("> Combo dir entry {e1} vs {e2}");
         // TODO: handle error
         let b1 = MAPPING_MASK & e1.directory as usize;
         let d1 = PspDirectory::new(&data1[b1..], b1).unwrap();
@@ -387,7 +338,7 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
         let b2 = MAPPING_MASK & e2.directory as usize;
         let d2 = PspDirectory::new(&data2[b2..], b2).unwrap();
 
-        diff_psp_dirs(&d1, &d2, data1, data2, verbose);
+        diff_psp_simple_dirs(&d1, &d2, data1, data2, verbose);
     }
 
     if !only_1.is_empty() {
@@ -410,11 +361,50 @@ fn diff_psps(p1: PspAndData, p2: PspAndData, verbose: bool) {
     }
 }
 
+fn diff_psp_dirs(dir1: &Directory, dir2: &Directory, data1: &[u8], data2: &[u8], verbose: bool) {
+    if *dir1 != *dir2 {
+        println!("PSP 1 and 2 are of different kinds, won't diff");
+        print_psp_dirs(dir1, data1);
+        print_psp_dirs(dir2, data2);
+        return;
+    }
+
+    let cs1 = dir1.get_checksum();
+    let cs2 = dir2.get_checksum();
+
+    let cs = if cs1 != cs2 {
+        format!("differ: {cs1:04x} {cs2:04x}")
+    } else {
+        "equal".to_string()
+    };
+
+    match dir1 {
+        Directory::PspCombo(d1) => match dir2 {
+            Directory::PspCombo(d2) => {
+                println!("Comparing {dir1} vs {dir2}, checksums {cs}");
+                diff_psp_combo_dirs(d1, d2, data1, data2, verbose);
+            }
+            // NOTE: We checked above that psp1 and psp2 are of the same kind.
+            _ => unreachable!(),
+        },
+
+        Directory::Psp(d1) => match dir2 {
+            Directory::Psp(d2) => {
+                diff_psp_simple_dirs(d1, d2, data1, data2, verbose);
+            }
+            // NOTE: We checked above that psp1 and psp2 are of the same kind.
+            _ => unreachable!(),
+        },
+        // FIXME: find a better interface, maybe PSP dirs only?
+        _ => unreachable!(),
+    }
+}
+
 pub fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     match rom1.psp_legacy() {
         Ok(psp1) => match rom2.psp_legacy() {
             Ok(psp2) => {
-                diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()), verbose);
+                diff_psp_dirs(&psp1, &psp2, rom1.data(), rom2.data(), verbose);
             }
             Err(e) => {
                 // FIXME: find a better interface
@@ -450,7 +440,7 @@ pub fn diff_psp(rom1: &amd::Rom, rom2: &amd::Rom, verbose: bool) {
     match rom1.psp_17_00() {
         Ok(psp1) => match rom2.psp_17_00() {
             Ok(psp2) => {
-                diff_psps((&psp1, rom1.data()), (&psp2, rom2.data()), verbose);
+                diff_psp_dirs(&psp1, &psp2, rom1.data(), rom2.data(), verbose);
             }
             Err(e) => {
                 println!("# PSP 1:");
@@ -569,7 +559,7 @@ pub fn diff_bios_simple_dir_entries(
     }
 }
 
-// TODO: support combo dirs
+// TODO: support diffing combo dirs
 pub fn diff_bios_simple_dirs(
     dir1: &Directory,
     dir2: &Directory,
@@ -621,7 +611,7 @@ pub fn diff_bios_simple_dirs(
                 print_bios_combo_dir(d1, data1);
             }
         },
-
+        // TODO: This _should_ not happen.
         _ => todo!(),
     }
 }

@@ -28,7 +28,7 @@ impl fmt::Display for RegionKind {
             RegionKind::EmbeddedController => "EC",
             _ => "Reserved",
         };
-        write!(f, "{}", name)
+        write!(f, "{name}")
     }
 }
 
@@ -44,12 +44,14 @@ pub struct Rom<'a> {
     descriptor: &'a flash::Descriptor,
 }
 
+const IFD_MAGIC: u32 = 0x5aa5_f00f;
+
 impl<'a> Rom<'a> {
     pub fn new(data: &'a [u8]) -> Result<Rom, String> {
         let mut i = 16;
 
         while i + mem::size_of::<flash::Descriptor>() <= data.len() {
-            if data[i..i + 4] == [0x5a, 0xa5, 0xf0, 0x0f] {
+            if data[i..i + 4] == IFD_MAGIC.to_be_bytes() {
                 return Ok(Rom {
                     data: &data[i - 16..],
                     descriptor: plain::from_bytes(&data[i..])

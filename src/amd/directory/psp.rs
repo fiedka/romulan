@@ -168,6 +168,7 @@ pub enum PspEntryType {
     PspLevel2Dir = 0x40,
     DxioPhySramFirmwarePublicKey = 0x43,
     UsbPhyFirmware = 0x44,
+    ExternalChipsetPSPBootLoader = 0x46,
     PspLevel2ADir = 0x48,
     BiosLevel2Dir = 0x49,
     PspLevel2BDir = 0x4a,
@@ -199,6 +200,7 @@ impl TryFrom<u8> for PspEntryType {
             0x40 => Ok(PspEntryType::PspLevel2Dir),
             0x43 => Ok(PspEntryType::DxioPhySramFirmwarePublicKey),
             0x44 => Ok(PspEntryType::UsbPhyFirmware),
+            0x46 => Ok(PspEntryType::ExternalChipsetPSPBootLoader),
             0x48 => Ok(PspEntryType::PspLevel2ADir),
             0x49 => Ok(PspEntryType::BiosLevel2Dir),
             0x4a => Ok(PspEntryType::PspLevel2BDir),
@@ -234,7 +236,7 @@ impl Display for PspDirectoryEntry {
                 self.value as usize & MAPPING_MASK
             )
         };
-        write!(f, "{kind:02x}.{sub:02x} {desc:51} {v:20}",)
+        write!(f, "{kind:02x}.{sub:02x} {desc:51} {v:20}")
     }
 }
 
@@ -267,6 +269,24 @@ impl PspDirectoryEntry {
         // TODO: In some cases, it differs across revisions/families.
         let res = if self.has_no_generic_header() {
             let body = data[start..end].to_vec().into_boxed_slice();
+            (None, body)
+        } else if self.kind == PspEntryType::ExternalChipsetPSPBootLoader as u8 {
+            // NOTE: Guessing from strings, this has to do with UMC firmware.
+            // NOTE: The header here is special.
+            // Sample from ASRock X570 Phantom Gaming 4 fw ver 5.63:
+            // 00110000: aa55 aa55 0000 0000 0000 0000 0010 02ff  .U.U............
+            // 00110010: 0000 0000 3000 00ff 0080 11ff 0000 0000  ....0...........
+            // 00110020: 0060 24ff ffff ffff ffff ffff ffff ffff  .`$.............
+            // 00110030: 2450 5350 ef21 f1cf 0400 0000 0000 0000  $PSP.!..........
+            // 00110040: 0000 0000 4004 0000 0001 0000 0000 0000  ....@...........
+            // 00110050: 2100 0000 1000 0000 4005 0000 0000 0000  !.......@.......
+            // 00110060: 0900 0000 4006 0000 5005 0000 0000 0000  ....@...P.......
+            // 00110070: 0100 0000 0000 1000 900b 0000 0000 0000  ................
+            // 00110080: ffff ffff ffff ffff ffff ffff ffff ffff  ................
+
+            // FIXME: It looks like there is more than just one blob in here.
+            let body_start = start + 0x100;
+            let body = data[body_start..end].to_vec().into_boxed_slice();
             (None, body)
         } else {
             let body_start = start + PSP_BIN_HEADER_SIZE;
@@ -351,7 +371,7 @@ impl PspDirectoryEntry {
                 | PspEntryType::PspTrustedOSPublicKeysTable
                 | PspEntryType::PspRpmcNvram
                 | PspEntryType::DmcuEram
-                | PspEntryType::DmcuIsr,)
+                | PspEntryType::DmcuIsr)
         )
     }
 
@@ -424,7 +444,9 @@ impl PspDirectoryEntry {
             0x10 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x12 => "SMU Firmware 2",
             0x13 => "PSP Early Secure Unlock Debug",
-            0x14 => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
+            // very similiar to ~PspTrustlets.bin~ in coreboot blobs
+            0x14 => "PSP MCLF Trustlets",
+            0x15 => "AMD Firmware PSP TEE IP KEY",
             0x1A => "Unknown (seen in A3MSTX_3.60K legacy PSP)",
             0x1B => "Boot Driver",
             0x1C => "SoC Driver",
@@ -475,7 +497,7 @@ impl PspDirectoryEntry {
             0x4C => "External Chipset Security Policy",
             0x4D => "External Chipset Secure Debug Unlock",
             0x4E => "PMU Public Key",
-            0x4F => "UMC Firmware",
+            0x4F => "Unified Memory Controller (UMC) Firmware",
             0x50 => "PSP Boot Loader Public Keys Table",
             0x51 => "PSP Trusted OS Public Keys Table",
             0x52 => "OEM PSP Boot Loader Application",
@@ -500,6 +522,7 @@ impl PspDirectoryEntry {
             0x81 => "OEM Sys-TA Signing Key",
             0x85 => "FW AMF SRAM",
             0x86 => "FW AMF DRAM",
+            0x87 => "AMD FW MFD MPM",
             0x88 => "FW AMF WLAN",
             0x89 => "FW AMF MFD",
             0x8C => "FW MPDMA TF",
@@ -512,8 +535,15 @@ impl PspDirectoryEntry {
             0x95 => "FW C20 MP",
             0x98 => "FW FCFG TABLE",
             0x9A => "FW MINIMSMU",
-            0x9D => "FW SRAM FW EXT",
+            0x9b => "AMD FW GFX IMU 0",
+            0x9c => "AMD FW GFX IMU 1",
+            0x9d => "AMD FW GFX IMU 2",
+            // 0x9D => "FW SRAM FW EXT",
+            0xa0 => "AMD FW S3 IMG",
             0xA2 => "FW UMSMU",
+            0xa4 => "AMD FW USB DP",
+            0xa5 => "AMD FW USB SS",
+            0xa6 => "AMD FW USB4",
             _ => "Unknown",
         }
     }
@@ -549,12 +579,20 @@ pub struct PspDirectory {
 
 impl Display for PspDirectory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PSP directory checksum {:08x}, {} entries",
-            self.header.checksum, self.header.entries
-        )
+        write!(f, "PSP {}", self.header)
     }
+}
+
+const HEADER_SIZE: usize = mem::size_of::<DirectoryHeader>();
+
+// FIXME: This seems a little hacky
+fn u8_slice_to_u16_slice(blob: &[u8]) -> Vec<u16> {
+    let mut b = vec![0u16; blob.len() / 2];
+    for (i, e) in b.iter_mut().enumerate() {
+        let a = [blob[i * 2], blob[i * 2 + 1]];
+        *e = u16::from_le_bytes(a);
+    }
+    b
 }
 
 impl<'a> PspDirectory {
@@ -564,10 +602,10 @@ impl<'a> PspDirectory {
             let header =
                 DirectoryHeader::read_from_prefix(data).ok_or("PSP directory header invalid")?;
 
-            let hs = mem::size_of::<DirectoryHeader>();
+            let entry_count = header.entries as usize;
             let (entries, _) = LV::<_, [PspDirectoryEntry]>::new_slice_from_prefix(
-                &data[hs..],
-                header.entries as usize,
+                &data[HEADER_SIZE..],
+                entry_count,
             )
             .ok_or("PSP directory entries invalid")?;
 
@@ -579,6 +617,20 @@ impl<'a> PspDirectory {
         }
 
         Err(format!("PSP directory header not found @ {addr:08x}"))
+    }
+
+    // Transform the internal structs back to the original data blob - i.e.,
+    // serialize for storing back.
+    pub fn data(&self) -> Vec<u8> {
+        let header_data = self.header.as_bytes();
+        let entries_data = self.entries.as_bytes();
+        [header_data, entries_data].concat()
+    }
+
+    pub fn checksum(&self) -> u32 {
+        let data = self.data();
+        let checksum_blob = u8_slice_to_u16_slice(&data[8..]);
+        fletcher::calc_fletcher32(&checksum_blob)
     }
 }
 
@@ -613,11 +665,15 @@ impl<'a> PspComboDirectory {
         Err(format!("PSP combo header not found @ {addr:08x}"))
     }
 
-    pub fn header(&self) -> ComboDirectoryHeader {
-        self.header
+    pub fn data(&self) -> Vec<u8> {
+        let header_data = self.header.as_bytes();
+        let entries_data = self.entries.as_bytes();
+        [header_data, entries_data].concat()
     }
 
-    pub fn entries(&self) -> Vec<ComboDirectoryEntry> {
-        self.entries.clone()
+    pub fn checksum(&self) -> u32 {
+        let data = self.data();
+        let checksum_blob = u8_slice_to_u16_slice(&data[8..]);
+        fletcher::calc_fletcher32(&checksum_blob)
     }
 }
